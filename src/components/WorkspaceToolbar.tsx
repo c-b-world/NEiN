@@ -77,15 +77,15 @@ export function WorkspaceToolbar({
 
   const wsTone =
     wsStatus === 'connected'
-      ? 'text-emerald-400'
+      ? 'text-emerald-700 dark:text-emerald-400'
       : wsStatus === 'offline'
-      ? 'text-slate-400'
-      : 'text-amber-400';
+      ? 'text-slate-600 dark:text-slate-400'
+      : 'text-amber-700 dark:text-amber-400';
 
   return (
     <section
       aria-label="リアルタイム更新設定"
-      className="border-b border-slate-800/80 bg-[#0D131F]"
+      className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] transition-colors"
     >
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
@@ -94,29 +94,29 @@ export function WorkspaceToolbar({
               aria-hidden="true"
               className={`inline-block h-2 w-2 rounded-full ${
                 wsStatus === 'connected'
-                  ? 'bg-emerald-400'
+                  ? 'bg-emerald-500 dark:bg-emerald-400'
                   : wsStatus === 'offline'
-                  ? 'bg-slate-500'
-                  : 'bg-amber-400'
+                  ? 'bg-slate-400 dark:bg-slate-500'
+                  : 'bg-amber-500 dark:bg-amber-400'
               }`}
             />
             <span className={wsTone}>{wsLabel}</span>
           </div>
 
-          <span aria-hidden="true" className="text-slate-700">
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">
             /
           </span>
 
           {archiveDate ? (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 font-mono text-sky-300 tabular-nums">
+              <span className="inline-flex items-center gap-1.5 font-mono text-[var(--nein-accent-text)] tabular-nums">
                 <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
                 アーカイブ: {formatDisplayYmd(archiveDate)}
               </span>
               <button
                 type="button"
                 onClick={onExitArchiveMode}
-                className="inline-flex items-center gap-1 rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20 cursor-pointer"
+                className="inline-flex items-center gap-1 rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--nein-accent-text)] hover:opacity-85 cursor-pointer"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
                 <span>最新に戻る</span>
@@ -124,18 +124,20 @@ export function WorkspaceToolbar({
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2 text-slate-400 font-mono tabular-nums">
+              <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                 <span>最終更新</span>
-                <span className="text-slate-200">{formatClockTime(lastUpdated)}</span>
+                <span className="text-slate-900 dark:text-slate-200 font-medium">
+                  {formatClockTime(lastUpdated)}
+                </span>
               </div>
 
               {autoUpdateEnabled && (
                 <>
-                  <span aria-hidden="true" className="text-slate-700 hidden sm:inline">
+                  <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 hidden sm:inline">
                     /
                   </span>
-                  <span className="text-slate-400 font-mono tabular-nums hidden sm:inline">
-                    次回自動取得 <strong className="text-sky-300 font-semibold">{nextRefreshIn}s</strong>
+                  <span className="text-slate-600 dark:text-slate-400 font-mono tabular-nums hidden sm:inline">
+                    次回自動取得 <strong className="text-[var(--nein-accent-text)] font-semibold">{nextRefreshIn}s</strong>
                   </span>
                 </>
               )}
@@ -147,7 +149,7 @@ export function WorkspaceToolbar({
           <button
             type="button"
             onClick={onQuickTestEEW}
-            className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/20 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/20 dark:text-red-200 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
           >
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             <span>即時テスト発報</span>
@@ -157,22 +159,22 @@ export function WorkspaceToolbar({
             <button
               type="button"
               onClick={onClearTestRecords}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>テスト消去</span>
             </button>
           )}
 
-          <div className="flex items-center rounded-md border border-slate-800 bg-[#090D16] p-0.5">
+          <div className="flex items-center rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] p-0.5">
             <button
               type="button"
               onClick={onToggleAutoUpdate}
               aria-pressed={autoUpdateEnabled}
-              className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400 ${
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--nein-accent)] ${
                 autoUpdateEnabled
-                  ? 'bg-slate-800 text-sky-300'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               {autoUpdateEnabled ? (
@@ -191,15 +193,15 @@ export function WorkspaceToolbar({
               value={pollIntervalSec}
               onChange={(e) => onChangePollInterval(Number(e.target.value))}
               disabled={!autoUpdateEnabled}
-              className="bg-transparent px-2 py-1 text-xs font-mono tabular-nums text-slate-300 focus:outline-none disabled:opacity-40 cursor-pointer"
+              className="bg-transparent px-2 py-1 text-xs font-mono tabular-nums text-slate-800 dark:text-slate-300 focus:outline-none disabled:opacity-40 cursor-pointer"
             >
-              <option value={10} className="bg-slate-900">
+              <option value={10} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                 10秒
               </option>
-              <option value={30} className="bg-slate-900">
+              <option value={30} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                 30秒
               </option>
-              <option value={60} className="bg-slate-900">
+              <option value={60} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                 60秒
               </option>
             </select>
@@ -210,14 +212,14 @@ export function WorkspaceToolbar({
             onClick={onToggleSound}
             aria-pressed={soundEnabled}
             aria-label={soundEnabled ? '緊急地震速報の警報音をオフにする' : '緊急地震速報の警報音をオンにする'}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
               soundEnabled
-                ? 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
-                : 'border-slate-800 bg-[#090D16] text-slate-500 hover:text-slate-300'
+                ? 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-800 hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-800'
+                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
             {soundEnabled ? (
-              <Volume2 className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+              <Volume2 className="h-3.5 w-3.5 text-[var(--nein-accent-text)]" aria-hidden="true" />
             ) : (
               <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
             )}
@@ -235,14 +237,14 @@ export function WorkspaceToolbar({
                 ? '緊急地震速報のブラウザプッシュ通知をオフにする'
                 : '緊急地震速報のブラウザプッシュ通知をオンにする'
             }
-            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
               notificationEnabled
-                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
-                : 'border-slate-800 bg-[#090D16] text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                ? 'border-emerald-600/40 bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-200'
+                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {notificationEnabled ? (
-              <Bell className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+              <Bell className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             ) : (
               <BellOff className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
             )}
@@ -250,7 +252,7 @@ export function WorkspaceToolbar({
             <span
               aria-hidden="true"
               className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                notificationEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                notificationEnabled ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-700'
               }`}
             >
               <span
@@ -265,7 +267,7 @@ export function WorkspaceToolbar({
             type="button"
             onClick={onRefreshNow}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200/70 disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -280,15 +282,15 @@ export function WorkspaceToolbar({
         <div
           role="status"
           data-testid="notification-hint-banner"
-          className="border-t border-amber-500/20 bg-amber-950/30"
+          className="border-t border-amber-500/25 bg-amber-100/80 dark:bg-amber-950/30"
         >
-          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-1.5 text-xs text-amber-200 sm:px-6">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-1.5 text-xs text-amber-900 dark:text-amber-200 sm:px-6">
             <span>{notificationHint}</span>
             <button
               type="button"
               onClick={onDismissNotificationHint}
               aria-label="通知設定の案内を閉じる"
-              className="rounded p-0.5 text-amber-300/80 hover:text-amber-100 cursor-pointer"
+              className="rounded p-0.5 text-amber-800 hover:text-amber-950 dark:text-amber-300/80 dark:hover:text-amber-100 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

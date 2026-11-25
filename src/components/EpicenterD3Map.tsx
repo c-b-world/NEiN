@@ -19,11 +19,18 @@ import {
   getNearbyCities,
 } from '../utils/d3MapUtils';
 import { getRecordCoordinates, getRecordTitle } from '../utils/quakeParser';
+import {
+  type ColorThemeId,
+  type ThemeMode,
+  getColorThemeOption,
+} from '../utils/themeSettings';
 
 interface EpicenterD3MapProps {
   records: P2PQuakeRecord[];
   selectedRecord: P2PQuakeRecord | null;
   onSelectRecord: (id: string) => void;
+  themeMode: ThemeMode;
+  colorTheme: ColorThemeId;
 }
 
 const SVG_WIDTH = 640;
@@ -43,6 +50,8 @@ export function EpicenterD3Map({
   records,
   selectedRecord,
   onSelectRecord,
+  themeMode,
+  colorTheme,
 }: EpicenterD3MapProps) {
   const [viewMode, setViewMode] = useState<MapViewMode>('vicinity');
   const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
@@ -131,7 +140,6 @@ export function EpicenterD3Map({
           selectedCoords.latitude,
           km
         );
-        // Compute label position at south edge of ring
         const deg = (km / 6371) * (180 / Math.PI);
         const labelPt = projection([
           selectedCoords.longitude,
@@ -176,7 +184,6 @@ export function EpicenterD3Map({
     return getNearbyCities(selectedCoords.latitude, selectedCoords.longitude, 3);
   }, [selectedCoords]);
 
-  // Wire d3.zoom for smooth drag-pan and wheel zoom
   useEffect(() => {
     const svgEl = svgRef.current;
     if (!svgEl) return;
@@ -196,7 +203,6 @@ export function EpicenterD3Map({
     };
   }, []);
 
-  // Reset pan/zoom when switching selected quake or view mode
   useEffect(() => {
     const svgEl = svgRef.current;
     const behavior = zoomBehaviorRef.current;
@@ -220,20 +226,38 @@ export function EpicenterD3Map({
     select(svgEl).transition().duration(200).call(behavior.transform, zoomIdentity);
   };
 
+  const isDark = themeMode === 'dark';
+  const themeDef = getColorThemeOption(colorTheme);
   const isSelectedEEW =
     selectedRecord?.code === 556 && !selectedRecord.cancelled;
-  const accentColor = isSelectedEEW ? '#EF4444' : '#38BDF8';
+  const accentColor = isSelectedEEW
+    ? isDark
+      ? '#EF4444'
+      : '#DC2626'
+    : isDark
+    ? themeDef.darkAccent
+    : themeDef.lightAccent;
+
+  const seaBg = isDark ? themeDef.mapSeaDark : themeDef.mapSeaLight;
+  const landFill = isDark ? themeDef.mapLandDark : themeDef.mapLandLight;
+  const landStroke = isDark ? themeDef.mapStrokeDark : themeDef.mapStrokeLight;
+  const neighborFill = isDark ? '#0D1422' : '#E2E8F0';
+  const neighborStroke = isDark ? '#1E293B' : '#CBD5E1';
+  const graticuleStroke = isDark ? '#172033' : '#CBD5E1';
+  const cityLabelFill = isDark ? '#94A3B8' : '#334155';
+  const cityDotFill = isDark ? '#64748B' : '#475569';
+  const labelOutline = seaBg;
   const invScale = 1 / Math.max(transform.k, 0.5);
 
   return (
     <div
       data-testid="epicenter-d3-map"
-      className="flex flex-col overflow-hidden rounded-lg border border-slate-800 bg-[#080C14]"
+      className="flex flex-col overflow-hidden rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)]"
     >
       {/* Map Header Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 px-3.5 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] px-3.5 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-200">
+          <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
             震源地図
           </span>
           <span className="font-mono text-[11px] tabular-nums text-slate-500">
@@ -245,7 +269,7 @@ export function EpicenterD3Map({
           <div
             role="group"
             aria-label="地図表示範囲"
-            className="flex items-center rounded border border-slate-800 bg-[#0D131F] p-0.5"
+            className="flex items-center rounded border border-[var(--nein-border)] bg-[var(--nein-sub)] p-0.5"
           >
             <button
               type="button"
@@ -254,8 +278,8 @@ export function EpicenterD3Map({
               aria-pressed={effectiveMode === 'vicinity'}
               className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                 effectiveMode === 'vicinity'
-                  ? 'bg-slate-800 text-sky-300'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               震源周辺
@@ -266,8 +290,8 @@ export function EpicenterD3Map({
               aria-pressed={effectiveMode === 'national'}
               className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 effectiveMode === 'national'
-                  ? 'bg-slate-800 text-sky-300'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               全国
@@ -277,13 +301,13 @@ export function EpicenterD3Map({
           <div
             role="group"
             aria-label="地図ズーム操作"
-            className="flex items-center rounded border border-slate-800 bg-[#0D131F]"
+            className="flex items-center rounded border border-[var(--nein-border)] bg-[var(--nein-sub)]"
           >
             <button
               type="button"
               onClick={() => handleZoomBy(1.5)}
               aria-label="地図を拡大"
-              className="p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100 cursor-pointer"
+              className="p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -291,7 +315,7 @@ export function EpicenterD3Map({
               type="button"
               onClick={() => handleZoomBy(1 / 1.5)}
               aria-label="地図を縮小"
-              className="border-x border-slate-800 p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100 cursor-pointer"
+              className="border-x border-[var(--nein-border)] p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <Minus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -299,7 +323,7 @@ export function EpicenterD3Map({
               type="button"
               onClick={handleResetZoom}
               aria-label="地図の表示位置をリセット"
-              className="p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100 cursor-pointer"
+              className="p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -308,7 +332,7 @@ export function EpicenterD3Map({
       </div>
 
       {/* D3 Interactive SVG Canvas */}
-      <div className="relative aspect-[640/440] w-full bg-[#070B13]">
+      <div className="relative aspect-[640/440] w-full" style={{ backgroundColor: seaBg }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
@@ -321,7 +345,7 @@ export function EpicenterD3Map({
             <path
               d={graticulePath}
               fill="none"
-              stroke="#172033"
+              stroke={graticuleStroke}
               strokeWidth={0.75 * invScale}
               strokeDasharray={`${3 * invScale} ${4 * invScale}`}
             />
@@ -331,8 +355,8 @@ export function EpicenterD3Map({
               <path
                 key={feat.key}
                 d={feat.d}
-                fill="#0D1422"
-                stroke="#1E293B"
+                fill={neighborFill}
+                stroke={neighborStroke}
                 strokeWidth={0.8 * invScale}
               />
             ))}
@@ -341,8 +365,8 @@ export function EpicenterD3Map({
             {japanPath && (
               <path
                 d={japanPath}
-                fill="#162135"
-                stroke="#3B4F70"
+                fill={landFill}
+                stroke={landStroke}
                 strokeWidth={1.15 * invScale}
                 strokeLinejoin="round"
               />
@@ -355,13 +379,13 @@ export function EpicenterD3Map({
                   cx={city.x}
                   cy={city.y}
                   r={2.2 * invScale}
-                  fill="#64748B"
+                  fill={cityDotFill}
                 />
                 <text
                   x={city.x + 4.5 * invScale}
                   y={city.y + 3 * invScale}
-                  fill="#94A3B8"
-                  stroke="#070B13"
+                  fill={cityLabelFill}
+                  stroke={labelOutline}
                   strokeWidth={2.5 * invScale}
                   paintOrder="stroke"
                   fontSize={10 * invScale}
@@ -377,15 +401,20 @@ export function EpicenterD3Map({
               const isSelected = record.id === selectedRecord?.id;
               if (isSelected) return null;
               const isEEW = record.code === 556;
+              const dotColor = isEEW
+                ? '#EF4444'
+                : isDark
+                ? themeDef.darkAccent
+                : themeDef.lightAccent;
               return (
                 <circle
                   key={record.id ? `${record.id}-${idx}` : `pin-${idx}`}
                   cx={x}
                   cy={y}
                   r={(isEEW ? 5 : 4) * invScale}
-                  fill={isEEW ? '#EF4444' : '#38BDF8'}
-                  fillOpacity={0.5}
-                  stroke={isEEW ? '#FCA5A5' : '#7DD3FC'}
+                  fill={dotColor}
+                  fillOpacity={0.55}
+                  stroke={isEEW ? '#FCA5A5' : dotColor}
                   strokeWidth={1 * invScale}
                   className="cursor-pointer"
                   onClick={(e) => {
@@ -404,9 +433,9 @@ export function EpicenterD3Map({
                 <path
                   d={ring.d}
                   fill={accentColor}
-                  fillOpacity={0.04}
+                  fillOpacity={isDark ? 0.05 : 0.07}
                   stroke={accentColor}
-                  strokeOpacity={0.45}
+                  strokeOpacity={0.55}
                   strokeWidth={1 * invScale}
                   strokeDasharray={`${4 * invScale} ${3 * invScale}`}
                 />
@@ -416,8 +445,8 @@ export function EpicenterD3Map({
                     y={ring.labelY + 11 * invScale}
                     textAnchor="middle"
                     fill={accentColor}
-                    fillOpacity={0.9}
-                    stroke="#070B13"
+                    fillOpacity={0.95}
+                    stroke={labelOutline}
                     strokeWidth={2.5 * invScale}
                     paintOrder="stroke"
                     fontSize={9.5 * invScale}
@@ -437,13 +466,13 @@ export function EpicenterD3Map({
                   cy={selectedPoint.y}
                   r={12 * invScale}
                   fill={accentColor}
-                  fillOpacity={0.18}
+                  fillOpacity={0.2}
                   stroke={accentColor}
-                  strokeWidth={1.5 * invScale}
+                  strokeWidth={1.6 * invScale}
                 />
                 <path
                   d={`M${selectedPoint.x - 6 * invScale},${selectedPoint.y - 6 * invScale} L${selectedPoint.x + 6 * invScale},${selectedPoint.y + 6 * invScale} M${selectedPoint.x + 6 * invScale},${selectedPoint.y - 6 * invScale} L${selectedPoint.x - 6 * invScale},${selectedPoint.y + 6 * invScale}`}
-                  stroke={isSelectedEEW ? '#FEE2E2' : '#E0F2FE'}
+                  stroke={isSelectedEEW ? '#DC2626' : isDark ? '#E0F2FE' : accentColor}
                   strokeWidth={2.2 * invScale}
                   strokeLinecap="round"
                 />
@@ -453,22 +482,22 @@ export function EpicenterD3Map({
         </svg>
 
         {!selectedCoords && (
-          <div className="pointer-events-none absolute bottom-3 left-3 rounded border border-slate-700/80 bg-slate-950/90 px-2.5 py-1 text-[11px] text-slate-300">
+          <div className="pointer-events-none absolute bottom-3 left-3 rounded border border-[var(--nein-border)] bg-[var(--nein-surface)]/95 px-2.5 py-1 text-[11px] text-slate-700 dark:text-slate-300">
             震源座標なし（日本全国を表示中）
           </div>
         )}
       </div>
 
       {/* Bottom Spatial Reference HUD */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 bg-[#0B101B] px-3.5 py-2 text-[11px] text-slate-400">
-        <span className="font-mono tabular-nums text-slate-300">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3.5 py-2 text-[11px] text-slate-600 dark:text-slate-400">
+        <span className="font-mono tabular-nums text-slate-800 dark:text-slate-300">
           {selectedCoords
             ? `北緯 ${selectedCoords.latitude.toFixed(1)}° / 東経 ${selectedCoords.longitude.toFixed(1)}°`
             : '座標データなし'}
         </span>
 
         {nearbyCities.length > 0 && (
-          <span className="font-mono tabular-nums text-slate-400 truncate">
+          <span className="font-mono tabular-nums text-slate-600 dark:text-slate-400 truncate">
             近隣：
             {nearbyCities
               .map((c) => `${c.name} ${c.distanceKm}km`)

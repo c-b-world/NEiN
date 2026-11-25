@@ -21,9 +21,9 @@ interface ArchiveCalendarProps {
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 function getSeverityDotClass(maxScale: number): string {
-  if (maxScale >= 45) return 'bg-red-400';
-  if (maxScale >= 30) return 'bg-amber-400';
-  return 'bg-sky-400';
+  if (maxScale >= 45) return 'bg-red-500 dark:bg-red-400';
+  if (maxScale >= 30) return 'bg-amber-500 dark:bg-amber-400';
+  return 'bg-sky-500 dark:bg-sky-400';
 }
 
 export function ArchiveCalendar({
@@ -137,7 +137,7 @@ export function ArchiveCalendar({
       data-testid="archive-calendar"
       role="region"
       aria-label="過去地震データ カレンダー選択"
-      className="mt-3 rounded-lg border border-slate-700/90 bg-[#090D16] p-3 shadow-xl"
+      className="mt-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-3 shadow-xl"
     >
       {/* Month / Year Navigation */}
       <div className="flex items-center justify-between gap-2">
@@ -145,7 +145,7 @@ export function ArchiveCalendar({
           type="button"
           onClick={handlePrevMonth}
           aria-label="前の月へ"
-          className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -164,7 +164,7 @@ export function ArchiveCalendar({
                 setViewMonth(today.month);
               }
             }}
-            className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-mono font-semibold text-slate-100 focus:border-sky-500 focus:outline-none cursor-pointer"
+            className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 focus:border-[var(--nein-accent)] focus:outline-none cursor-pointer"
           >
             {yearOptions.map((y) => (
               <option key={y} value={y}>
@@ -180,7 +180,7 @@ export function ArchiveCalendar({
             id="archive-cal-month"
             value={viewMonth}
             onChange={(e) => setViewMonth(Number(e.target.value))}
-            className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-mono font-semibold text-slate-100 focus:border-sky-500 focus:outline-none cursor-pointer"
+            className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 focus:border-[var(--nein-accent)] focus:outline-none cursor-pointer"
           >
             {monthOptions.map((m) => (
               <option key={m} value={m}>
@@ -195,7 +195,7 @@ export function ArchiveCalendar({
           onClick={handleNextMonth}
           disabled={isAtCurrentMonth}
           aria-label="次の月へ"
-          className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 hover:bg-slate-200/70 disabled:opacity-35 disabled:cursor-not-allowed dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
         >
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -208,9 +208,9 @@ export function ArchiveCalendar({
             key={wd}
             className={
               idx === 0
-                ? 'text-red-400/85'
+                ? 'text-red-600 dark:text-red-400/85'
                 : idx === 6
-                ? 'text-sky-400/85'
+                ? 'text-sky-600 dark:text-sky-400/85'
                 : 'text-slate-500'
             }
           >
@@ -250,15 +250,15 @@ export function ArchiveCalendar({
               aria-pressed={isSelected}
               className={`relative flex h-8 flex-col items-center justify-center rounded text-xs font-mono tabular-nums transition-colors ${
                 cell.isFuture
-                  ? 'text-slate-700 cursor-not-allowed'
+                  ? 'text-slate-400 dark:text-slate-700 cursor-not-allowed'
                   : isSelected
-                  ? 'bg-sky-500 font-bold text-slate-950 cursor-pointer'
+                  ? 'bg-[var(--nein-accent)] font-bold text-[var(--nein-accent-contrast)] cursor-pointer'
                   : cell.inCurrentMonth
-                  ? 'text-slate-200 hover:bg-slate-800 cursor-pointer'
-                  : 'text-slate-600 hover:bg-slate-800/50 cursor-pointer'
+                  ? 'text-slate-800 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer'
+                  : 'text-slate-400 hover:bg-slate-200/60 dark:text-slate-600 dark:hover:bg-slate-800/50 cursor-pointer'
               } ${
                 cell.isToday && !isSelected
-                  ? 'ring-1 ring-inset ring-sky-400/70'
+                  ? 'ring-1 ring-inset ring-[var(--nein-accent)]'
                   : ''
               }`}
             >
@@ -268,7 +268,7 @@ export function ArchiveCalendar({
                   aria-hidden="true"
                   className={`mt-0.5 h-1 w-1 rounded-full ${
                     isSelected
-                      ? 'bg-slate-950'
+                      ? 'bg-[var(--nein-accent-contrast)]'
                       : getSeverityDotClass(summary.maxScale)
                   }`}
                 />
@@ -279,22 +279,22 @@ export function ArchiveCalendar({
       </div>
 
       {/* Footer / Legend / Actions */}
-      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 text-[11px]">
-        <div className="flex items-center gap-2.5 text-slate-400">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--nein-border-subtle)] pt-2 text-[11px]">
+        <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-400">
           {loadingMonth ? (
             <span>月間履歴を確認中...</span>
           ) : (
             <>
               <span className="inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden="true" />
                 震度1-2
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden="true" />
                 3-4
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-400" aria-hidden="true" />
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 dark:bg-red-400" aria-hidden="true" />
                 5弱+
               </span>
             </>
@@ -309,7 +309,7 @@ export function ArchiveCalendar({
               setViewMonth(today.month);
               handleSelectCell(today.ymd);
             }}
-            className="rounded border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
+            className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-[11px] font-medium text-slate-800 hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
           >
             今日を取得
           </button>
@@ -321,7 +321,7 @@ export function ArchiveCalendar({
                 onExitArchive();
                 onClose?.();
               }}
-              className="inline-flex items-center gap-1 rounded border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/20 cursor-pointer"
+              className="inline-flex items-center gap-1 rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-2 py-1 text-[11px] font-medium text-[var(--nein-accent-text)] hover:opacity-85 cursor-pointer"
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
               <span>リアルタイム</span>

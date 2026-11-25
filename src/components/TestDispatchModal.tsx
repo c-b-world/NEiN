@@ -58,21 +58,21 @@ export function TestDispatchModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 dark:bg-black/75 p-4"
       data-testid="test-dispatch-modal"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="test-dispatch-title"
-        className="w-full max-w-lg overflow-hidden rounded-lg border border-slate-700 bg-[#0D131F] shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-[var(--nein-border-subtle)] px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <BellRing className="h-4 w-4 text-amber-400" aria-hidden="true" />
+            <BellRing className="h-4 w-4 text-amber-500 dark:text-amber-400" aria-hidden="true" />
             <h2
               id="test-dispatch-title"
-              className="text-base font-bold text-slate-50"
+              className="text-base font-bold text-slate-900 dark:text-slate-50"
             >
               緊急地震速報 テスト送信
             </h2>
@@ -81,14 +81,14 @@ export function TestDispatchModal({
             type="button"
             onClick={onClose}
             aria-label="テスト送信ダイアログを閉じる"
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 cursor-pointer"
+            className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
         <div className="p-5">
-          <p className="text-xs leading-relaxed text-slate-400">
+          <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
             送信するシナリオを選択すると、即座に緊急地震速報を受信した状態になり、画面中央の警告表示と警報音・履歴リストへの追加を確認できます。
           </p>
 
@@ -101,12 +101,12 @@ export function TestDispatchModal({
                   onClose();
                   onDispatch(preset.id);
                 }}
-                className="w-full rounded-md border border-slate-800 bg-[#090D16] px-4 py-3 text-left transition-colors hover:border-amber-500/60 hover:bg-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="w-full rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-4 py-3 text-left transition-colors hover:border-amber-500/60 hover:bg-amber-500/5 dark:hover:bg-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-amber-500"
               >
-                <div className="text-sm font-semibold text-slate-100">
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {preset.title}
                 </div>
-                <div className="mt-1 text-xs text-slate-300">
+                <div className="mt-1 text-xs text-slate-700 dark:text-slate-300">
                   {preset.subtitle}
                 </div>
                 <div className="mt-1 font-mono text-[11px] text-slate-500">
@@ -117,11 +117,11 @@ export function TestDispatchModal({
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-800 bg-[#090D16] px-5 py-3">
+        <div className="flex justify-end border-t border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
+            className="rounded-md border border-[var(--nein-border)] bg-[var(--nein-surface)] px-4 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
           >
             キャンセル
           </button>
