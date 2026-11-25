@@ -1,0 +1,136 @@
+NEiN Disaster Intelligence System
+著作権・ライセンスおよび免責事項
+
+Copyright © 2026 IDIO. All Rights Reserved.
+
+【著作権および知的財産権】
+
+NEiN防災は、IDIOによって企画・開発・運営される独立型防災情報プラットフォームです。
+
+本サービスにおける独自のプログラム、ソースコード、名称、ロゴ、デザイン、ユーザーインターフェース、文章およびその他の独自制作物に関する知的財産権は、
+IDIOまたは正当な権利者に帰属します。
+
+法令または個別のライセンスによって認められる場合を除き、運営者の事前許可なく、これらの制作物を複製、転載、改変、再配布、商用利用することを禁止します。
+
+【外部APIおよび情報提供元】
+
+本サービスは、P2P地震情報が提供するJSON API v2を利用しています。
+
+地震情報、津波情報および緊急地震速報等の外部提供データについては、各情報提供元が定める利用規約およびライセンスに準拠します。
+
+気象庁が発表する情報は、P2P地震情報を経由して取得し、NEiN防災の表示形式に合わせて加工・可視化される場合があります。
+
+外部提供データに対して、IDIOが独占的な権利を主張することはありません。
+
+情報提供元：
+P2P地震情報（P2PQuake）
+https://www.p2pquake.net/
+
+API仕様書：
+https://www.p2pquake.net/develop/json_api_v2/
+
+二次利用規約：
+https://www.p2pquake.net/secondary_use/
+
+気象庁：
+https://www.jma.go.jp/
+
+Creative Commons Attribution 4.0 International（該当するデータに適用）：
+https://creativecommons.org/licenses/by/4.0/
+
+【免責事項】
+
+本サービスは、災害情報の提供および利用者の判断を補助することを目的としたものであり、政府機関、気象庁、地方自治体またはP2P地震情報の公式サービスではありません。
+
+提供される情報の正確性、完全性、即時性、継続性および可用性を保証するものではありません。
+
+通信障害、外部APIの停止、システム障害その他の要因により、情報の遅延、欠落、誤表示が発生する場合があります。
+
+災害発生時には、気象庁、地方自治体および関係機関が発表する公式情報を優先してください。
+
+本サービスの利用または利用不能に起因する損害について、IDIOは法令で認められる範囲において責任を負わないものとします。
+
+━━━━━━━━━━━━━━━━━━━━
+
+NEiN Disaster Intelligence System
+Developed and Operated by IDIO.
+Data provided by P2PQuake and Japan Meteorological Agency.
+
+情報を、力に。
+技術を、命のために。
+
+DETECT. ANALYZE. PROTECT.
+
+Copyright © 2026 IDIO. All Rights Reserved.
+
+◆-----◇-----◆-----◇-----◆-----◇-----◆-----◇-----◆
+
+NEiN Disaster Intelligence System
+Copyright, Licensing and Disclaimer
+
+Copyright © 2026 IDIO. All Rights Reserved.
+
+【Copyright and Intellectual Property】
+
+NEiN is an independent disaster information platform designed, developed, and operated by IDIO.
+
+All intellectual property rights associated with the original software, source code, names, logos, designs, user interfaces, written content,
+and other original materials of this service belong to IDIO or their respective lawful rights holders.
+
+Unauthorized reproduction, republication, modification, redistribution, or commercial use of these materials is prohibited without prior permission, 
+except where permitted by applicable law or individual licenses.
+
+【Third-Party APIs and Data Sources】
+
+This service utilizes the JSON API v2 provided by P2PQuake.
+
+Earthquake information, tsunami information, earthquake early warnings, and other externally supplied data are subject to the applicable terms of use
+and licenses established by their respective providers.
+
+Information issued by the Japan Meteorological Agency is obtained through P2PQuake and may be processed or visualized to accommodate the presentation
+format of NEiN.
+
+IDIO claims no exclusive ownership over externally supplied data.
+
+Data Provider:
+P2PQuake
+https://www.p2pquake.net/
+
+API Documentation:
+https://www.p2pquake.net/develop/json_api_v2/
+
+Secondary Use Policy:
+https://www.p2pquake.net/secondary_use/
+
+Japan Meteorological Agency (JMA):
+https://www.jma.go.jp/
+
+Creative Commons Attribution 4.0 International (applicable data only):
+https://creativecommons.org/licenses/by/4.0/
+
+【Disclaimer】
+
+NEiN is intended to provide disaster-related information and support informed decision-making. It is not an official service of any government agency,
+the Japan Meteorological Agency, local authorities, or P2PQuake.
+
+The accuracy, completeness, timeliness, continuity, and availability of the information provided are not guaranteed.
+
+Information may be delayed, incomplete, or inaccurate due to communication failures, external API outages, system malfunctions, or other circumstances.
+
+In the event of a disaster, users should prioritize official information issued by the Japan Meteorological Agency, local authorities, and other relevant
+institutions.
+
+To the extent permitted by applicable law, IDIO shall not be held liable for damages arising from the use of, or inability to use, this service.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NEiN Disaster Intelligence System
+Developed and Operated by IDIO.
+Data provided by P2PQuake and Japan Meteorological Agency.
+
+Empowering Information.
+Engineering Technology to Protect Lives.
+
+DETECT. ANALYZE. PROTECT.
+
+Copyright © 2026 IDIO. All Rights Reserved.
