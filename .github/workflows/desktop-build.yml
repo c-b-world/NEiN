@@ -1,0 +1,44 @@
+name: NEiN Desktop Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Prepare Desktop Edition
+        run: node desktop/prepare.mjs
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows EXE
+        run: npm run desktop:build:${{ matrix.arch }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEiN-Windows-${{ matrix.arch }}
+          path: release/*.exe
+          if-no-files-found: error
