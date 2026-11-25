@@ -9,6 +9,8 @@ if (!pkg.scripts?.build) {
 }
 
 pkg.main = 'desktop/main.cjs';
+pkg.description = pkg.description || 'NEiN 防災 — リアルタイム地震情報・緊急地震速報・気象情報モニター';
+pkg.author = pkg.author || 'IDIO';
 
 pkg.scripts['desktop:start'] = 'electron .';
 

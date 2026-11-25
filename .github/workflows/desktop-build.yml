@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Prepare Desktop Edition
         run: node desktop/prepare.mjs
@@ -34,12 +34,13 @@ jobs:
       - name: Build Windows EXE
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           if ("${{ matrix.arch }}" -eq "x64") {
             npm run desktop:build
           } else {
             npm run desktop:build:arm64
           }
-          exit $LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 

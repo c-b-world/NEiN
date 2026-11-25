@@ -6,21 +6,19 @@ directories:
 files:
   - dist/**/*
   - desktop/main.cjs
-  - package.json
 asar: true
 win:
+  executableName: NEiN
   target:
-    - target: nsis
-      arch:
-        - x64
-        - arm64
-    - target: portable
-      arch:
-        - x64
-        - arm64
+    - nsis
+    - portable
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-artifactName: ${productName}-${version}-${arch}.${ext}
+  unicode: true
+  artifactName: NEiN-Setup-${version}-${arch}.${ext}
+portable:
+  artifactName: NEiN-Portable-${version}-${arch}.${ext}
+

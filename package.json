@@ -1,7 +1,9 @@
 {
-  "name": "react-example",
+  "name": "nein-bousai",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "NEiN 防災 — リアルタイム地震情報・緊急地震速報・気象情報モニター",
+  "author": "IDIO",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
