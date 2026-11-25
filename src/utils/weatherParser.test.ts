@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getWeatherOfficeByCode } from '../data/japanWeatherRegions.ts';
+import { resolveJmaForecastFileCode } from './weatherApi.ts';
 import {
   deriveModelAdvisoryNotes,
   evaluateFreshness,
@@ -11,6 +12,12 @@ import {
 } from './weatherParser.ts';
 
 const tokyoOffice = getWeatherOfficeByCode('130000');
+
+test('resolveJmaForecastFileCode routes bundled sub-offices 014030 and 460040 to parent JMA files', () => {
+  assert.equal(resolveJmaForecastFileCode('014030'), '014100');
+  assert.equal(resolveJmaForecastFileCode('460040'), '460100');
+  assert.equal(resolveJmaForecastFileCode('130000'), '130000');
+});
 
 test('evaluateFreshness flags expired data and handles invalid/missing timestamps', () => {
   const now = Date.parse('2026-11-25T12:00:00+09:00');

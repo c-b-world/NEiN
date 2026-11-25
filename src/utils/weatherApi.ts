@@ -178,16 +178,28 @@ export async function fetchAmedasMapSnapshot(forceRefresh = false): Promise<Amed
   };
 }
 
+const FORECAST_OFFICE_OVERRIDES: Record<string, string> = {
+  // 十勝地方 (014030) の天気予報JSONは釧路・根室・十勝まとめ (014100.json) に格納されている
+  '014030': '014100',
+  // 奄美地方 (460040) の天気予報JSONは鹿児島県まとめ (460100.json) に格納されている
+  '460040': '460100',
+};
+
+export function resolveJmaForecastFileCode(officeCode: string): string {
+  return FORECAST_OFFICE_OVERRIDES[officeCode] ?? officeCode;
+}
+
 export async function fetchJmaForecastRaw(
   officeCode: string,
   forceRefresh = false,
 ): Promise<{ data: unknown; fetchedAt: Date }> {
+  const fileCode = resolveJmaForecastFileCode(officeCode);
   return cachedFetch(
-    `jma:forecast:${officeCode}`,
+    `jma:forecast:${fileCode}`,
     CACHE_TTL_MS.forecast,
     () =>
       fetchJsonWithTimeout(
-        `https://www.jma.go.jp/bosai/forecast/data/forecast/${officeCode}.json`,
+        `https://www.jma.go.jp/bosai/forecast/data/forecast/${fileCode}.json`,
       ),
     forceRefresh,
   );
@@ -440,7 +452,8 @@ export function buildOverviewRowFromCache(
       )
     : null;
 
-  const forecastEntry = memoryCache.get(`jma:forecast:${office.officeCode}`) as
+  const forecastFileCode = resolveJmaForecastFileCode(office.officeCode);
+  const forecastEntry = memoryCache.get(`jma:forecast:${forecastFileCode}`) as
     | CacheEntry<unknown>
     | undefined;
   const warningEntry = memoryCache.get(`jma:warning:${office.officeCode}`) as
