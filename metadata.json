@@ -1,0 +1,8 @@
+{
+  "name": "NEiN",
+  "description": "地震情報を、いち早く。\nそして、わかりやすく。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
