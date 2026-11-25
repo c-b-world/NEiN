@@ -10,10 +10,21 @@ import type {
   TestEEWPreset,
 } from '../types/quake';
 
+export const HISTORY_PAGE_LIMIT = 100;
+export const INITIAL_HISTORY_PAGES = 3; // 300 records on initial load
+export const POLL_HISTORY_LIMIT = 50;
+export const MAX_HISTORY_RECORDS = 1000;
+
 export const REQUESTED_API_URL =
-  'https://api.p2pquake.net/v2/history?codes=551,552,554,556,561&limit=30&offset=0';
+  'https://api.p2pquake.net/v2/history?codes=551,552,554,556,561&limit=100&offset=0';
 
 export const P2PQUAKE_WS_URL = 'wss://api.p2pquake.net/v2/ws';
+
+export function buildHistoryApiUrl(limit = HISTORY_PAGE_LIMIT, offset = 0): string {
+  return normalizeP2PQuakeUrl(
+    `https://api.p2pquake.net/v2/history?codes=551,552,554,556,561&limit=${limit}&offset=${offset}`,
+  );
+}
 
 /**
  * P2PQuake v2 /history requires repeated `codes=` query parameters (OpenAPI array),
@@ -571,7 +582,7 @@ export function normalizeQuakeRecord(
 export function mergeQuakeRecords(
   incoming: P2PQuakeRecord[],
   existing: P2PQuakeRecord[],
-  limit = 30
+  limit = MAX_HISTORY_RECORDS
 ): P2PQuakeRecord[] {
   const testRecords = existing.filter((r) => r.isTest);
   const byId = new Map<string, P2PQuakeRecord>();
@@ -587,6 +598,99 @@ export function mergeQuakeRecords(
   return Array.from(byId.values())
     .sort((a, b) => (b.time || '').localeCompare(a.time || ''))
     .slice(0, limit);
+}
+
+export interface QuakeSearchCriteria {
+  filter: QuakeFilter;
+  searchQuery: string;
+  dateFrom: string; // YYYY-MM-DD or ''
+  dateTo: string;   // YYYY-MM-DD or ''
+  minScale: number; // 0 = all, or 10..70
+  minMagnitude: number | null; // null = all
+}
+
+export function extractRecordDateYmd(record: P2PQuakeRecord): string | null {
+  const rawTime = record.code === 551 ? record.earthquake.time || record.time : record.time;
+  if (!rawTime) return null;
+  const m = rawTime.match(/^(\d{4})[/-](\d{2})[/-](\d{2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+export function getRecordMaxScale(record: P2PQuakeRecord): number {
+  if (record.code === 551) {
+    return record.earthquake.maxScale ?? 0;
+  }
+  if (record.code === 556) {
+    return getEEWMaxScale(record);
+  }
+  return 0;
+}
+
+export function getRecordMagnitude(record: P2PQuakeRecord): number | null {
+  if (record.code === 551) {
+    const m = record.earthquake.hypocenter.magnitude;
+    return m !== undefined && m !== null && m >= 0 ? m : null;
+  }
+  if (record.code === 556) {
+    const m = record.earthquake?.hypocenter.magnitude;
+    return m !== undefined && m !== null && m >= 0 ? m : null;
+  }
+  return null;
+}
+
+export function matchesQuakeText(record: P2PQuakeRecord, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return true;
+  if (record.code === 551) {
+    const name = record.earthquake.hypocenter.name?.toLowerCase() ?? '';
+    const prefs = record.points?.map((p) => `${p.pref}${p.addr}`.toLowerCase()).join(' ') ?? '';
+    return name.includes(q) || prefs.includes(q);
+  }
+  if (record.code === 556) {
+    const name = record.earthquake?.hypocenter.name?.toLowerCase() ?? '';
+    const areas = record.areas?.map((a) => `${a.pref}${a.name}`.toLowerCase()).join(' ') ?? '';
+    return name.includes(q) || areas.includes(q) || '緊急地震速報'.includes(q);
+  }
+  if (record.code === 554) {
+    return '緊急地震速報'.includes(q) || '発表検出'.includes(q);
+  }
+  if (record.code === 552) {
+    return '津波予報'.includes(q);
+  }
+  return `地域コード ${record.area}`.includes(q) || '地震感知'.includes(q);
+}
+
+export function matchesQuakeSearch(
+  record: P2PQuakeRecord,
+  criteria: QuakeSearchCriteria,
+): boolean {
+  if (!matchesFilter(record, criteria.filter)) {
+    return false;
+  }
+
+  if (!matchesQuakeText(record, criteria.searchQuery)) {
+    return false;
+  }
+
+  if (criteria.dateFrom || criteria.dateTo) {
+    const ymd = extractRecordDateYmd(record);
+    if (!ymd) return false;
+    if (criteria.dateFrom && ymd < criteria.dateFrom) return false;
+    if (criteria.dateTo && ymd > criteria.dateTo) return false;
+  }
+
+  if (criteria.minScale > 0) {
+    const scale = getRecordMaxScale(record);
+    if (scale < criteria.minScale) return false;
+  }
+
+  if (criteria.minMagnitude !== null && criteria.minMagnitude > 0) {
+    const mag = getRecordMagnitude(record);
+    if (mag === null || mag < criteria.minMagnitude) return false;
+  }
+
+  return true;
 }
 
 function formatNowP2P(date = new Date()): string {

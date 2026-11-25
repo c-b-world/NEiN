@@ -78,10 +78,10 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
               aria-hidden="true"
             />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2
                   id="eew-modal-title"
-                  className="text-lg font-bold tracking-tight text-white sm:text-xl"
+                  className="text-base font-bold tracking-tight text-white sm:text-xl"
                 >
                   {isCancelled
                     ? '緊急地震速報（取消）'
@@ -90,7 +90,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
                     : '緊急地震速報（警報）'}
                 </h2>
                 {alert.isTest && (
-                  <span className="rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-950">
+                  <span className="shrink-0 whitespace-nowrap rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-950">
                     テスト送信
                   </span>
                 )}

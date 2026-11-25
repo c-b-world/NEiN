@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 const NAV_ITEMS: Array<{ id: QuakeFilter; label: string }> = [
-  { id: 'all', label: '新着30件' },
+  { id: 'all', label: '新着履歴' },
   { id: 'quake', label: '地震情報' },
   { id: 'eew', label: '緊急地震速報' },
   { id: 'other', label: '津波・感知' },

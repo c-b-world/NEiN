@@ -26,8 +26,21 @@ export default function App() {
     setFilter,
     searchQuery,
     setSearchQuery,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    minScale,
+    setMinScale,
+    minMagnitude,
+    setMinMagnitude,
+    resetSearchFilters,
+    hasActiveFilters,
     isLoading,
     isRefreshing,
+    isLoadingMore,
+    canLoadMore,
+    loadMoreHistory,
     error,
     lastUpdated,
     autoUpdateEnabled,
@@ -38,6 +51,10 @@ export default function App() {
     wsStatus,
     soundEnabled,
     setSoundEnabled,
+    notificationEnabled,
+    notificationHint,
+    dismissNotificationHint,
+    toggleNotificationEnabled,
     activeEEW,
     dismissEEW,
     refreshNow,
@@ -126,6 +143,10 @@ export default function App() {
           onRefreshNow={() => void refreshNow()}
           soundEnabled={soundEnabled}
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          notificationEnabled={notificationEnabled}
+          onToggleNotification={() => void toggleNotificationEnabled()}
+          notificationHint={notificationHint}
+          onDismissNotificationHint={dismissNotificationHint}
           onQuickTestEEW={() => triggerTestEEW('kanto_alert')}
           hasTestRecords={hasTestRecords}
           onClearTestRecords={clearTestRecords}
@@ -163,14 +184,28 @@ export default function App() {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
               <QuakeList
                 records={filteredRecords}
+                totalCount={records.length}
                 selectedId={selectedId}
                 onSelect={handleSelectRecord}
                 filter={filter}
                 onFilterChange={setFilter}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                dateFrom={dateFrom}
+                onDateFromChange={setDateFrom}
+                dateTo={dateTo}
+                onDateToChange={setDateTo}
+                minScale={minScale}
+                onMinScaleChange={setMinScale}
+                minMagnitude={minMagnitude}
+                onMinMagnitudeChange={setMinMagnitude}
+                hasActiveFilters={hasActiveFilters}
+                onResetFilters={resetSearchFilters}
                 counts={counts}
                 isLoading={isLoading}
+                canLoadMore={canLoadMore}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={() => void loadMoreHistory()}
                 archiveDate={archiveDate}
                 onSelectArchiveDate={(ymd) => void selectArchiveDate(ymd)}
                 onExitArchiveMode={exitArchiveMode}

@@ -1,14 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  HISTORY_PAGE_LIMIT,
+  MAX_HISTORY_RECORDS,
   REQUESTED_API_URL,
+  buildHistoryApiUrl,
   createTestEEWPayload,
   extractMunicipalityName,
+  extractRecordDateYmd,
   formatDepth,
   formatMagnitude,
   formatQuakeForClipboard,
+  getRecordMagnitude,
+  getRecordMaxScale,
   getScalePresentation,
   matchesFilter,
+  matchesQuakeSearch,
   mergeQuakeRecords,
   normalizeP2PQuakeUrl,
   resolveRecordId,
@@ -19,8 +26,15 @@ test('normalizeP2PQuakeUrl expands comma-separated codes into OpenAPI array para
   const normalized = normalizeP2PQuakeUrl(REQUESTED_API_URL);
   const parsed = new URL(normalized);
   assert.deepEqual(parsed.searchParams.getAll('codes'), ['551', '552', '554', '556', '561']);
-  assert.equal(parsed.searchParams.get('limit'), '30');
+  assert.equal(parsed.searchParams.get('limit'), String(HISTORY_PAGE_LIMIT));
   assert.equal(parsed.searchParams.get('offset'), '0');
+});
+
+test('buildHistoryApiUrl supports offset pagination up to limit=100', () => {
+  const url = new URL(buildHistoryApiUrl(100, 200));
+  assert.deepEqual(url.searchParams.getAll('codes'), ['551', '552', '554', '556', '561']);
+  assert.equal(url.searchParams.get('limit'), '100');
+  assert.equal(url.searchParams.get('offset'), '200');
 });
 
 test('getScalePresentation maps JMA scales accurately', () => {
@@ -150,4 +164,110 @@ test('resolveRecordId and mergeQuakeRecords assign unique non-empty IDs when id 
   assert.ok(merged[0].id && merged[0].id.length > 0);
   assert.ok(merged[1].id && merged[1].id.length > 0);
   assert.notEqual(merged[0].id, merged[1].id);
+});
+
+test('mergeQuakeRecords default cap retains hundreds of records up to MAX_HISTORY_RECORDS', () => {
+  const many: P2PQuakeRecord[] = Array.from({ length: 350 }, (_, i) => ({
+    id: `bulk-${i}`,
+    code: 561,
+    time: `2026/11/${String((i % 25) + 1).padStart(2, '0')} 10:00:${String(i % 60).padStart(2, '0')}.000`,
+    area: 415,
+  }));
+  const merged = mergeQuakeRecords(many, []);
+  assert.equal(MAX_HISTORY_RECORDS, 1000);
+  assert.equal(merged.length, 350);
+});
+
+test('extractRecordDateYmd, getRecordMaxScale, getRecordMagnitude, and matchesQuakeSearch filter accurately', () => {
+  const tokyoQuake: JMAQuake551 = {
+    id: 'search-q1',
+    code: 551,
+    time: '2026/11/24 14:20:00.000',
+    earthquake: {
+      domesticTsunami: 'None',
+      maxScale: 40,
+      time: '2026/11/24 14:15:00',
+      hypocenter: {
+        name: '茨城県南部',
+        latitude: 36.1,
+        longitude: 140.0,
+        depth: 50,
+        magnitude: 5.2,
+      },
+    },
+    issue: { source: '気象庁', time: '2026/11/24 14:20:00', type: 'DetailScale' },
+    points: [{ pref: '東京都', addr: '千代田区大手町', isArea: false, scale: 30 }],
+  };
+
+  const smallQuake: JMAQuake551 = {
+    id: 'search-q2',
+    code: 551,
+    time: '2026/11/20 06:05:00.000',
+    earthquake: {
+      domesticTsunami: 'None',
+      maxScale: 20,
+      time: '2026/11/20 06:00:00',
+      hypocenter: {
+        name: '熊本県熊本地方',
+        latitude: 32.8,
+        longitude: 130.7,
+        depth: 10,
+        magnitude: 3.1,
+      },
+    },
+    issue: { source: '気象庁', time: '2026/11/20 06:05:00', type: 'DetailScale' },
+    points: [{ pref: '熊本県', addr: '熊本中央区大江', isArea: false, scale: 20 }],
+  };
+
+  assert.equal(extractRecordDateYmd(tokyoQuake), '2026-11-24');
+  assert.equal(getRecordMaxScale(tokyoQuake), 40);
+  assert.equal(getRecordMagnitude(tokyoQuake), 5.2);
+
+  assert.equal(
+    matchesQuakeSearch(tokyoQuake, {
+      filter: 'all',
+      searchQuery: '茨城',
+      dateFrom: '2026-11-23',
+      dateTo: '2026-11-25',
+      minScale: 30,
+      minMagnitude: 5.0,
+    }),
+    true
+  );
+
+  assert.equal(
+    matchesQuakeSearch(smallQuake, {
+      filter: 'all',
+      searchQuery: '',
+      dateFrom: '2026-11-23',
+      dateTo: '',
+      minScale: 0,
+      minMagnitude: null,
+    }),
+    false
+  );
+
+  assert.equal(
+    matchesQuakeSearch(smallQuake, {
+      filter: 'all',
+      searchQuery: '熊本',
+      dateFrom: '',
+      dateTo: '',
+      minScale: 30,
+      minMagnitude: null,
+    }),
+    false
+  );
+
+  assert.equal(
+    matchesQuakeSearch(smallQuake, {
+      filter: 'quake',
+      searchQuery: '熊本',
+      dateFrom: '2026-11-20',
+      dateTo: '2026-11-20',
+      minScale: 20,
+      minMagnitude: 3.0,
+    }),
+    true
+  );
 });

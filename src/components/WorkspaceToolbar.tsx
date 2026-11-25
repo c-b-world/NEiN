@@ -1,4 +1,17 @@
-import { Calendar, Pause, Play, RefreshCw, RotateCcw, Trash2, Volume2, VolumeX, Zap } from 'lucide-react';
+import {
+  Bell,
+  BellOff,
+  Calendar,
+  Pause,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from 'lucide-react';
 import type { WsStatus } from '../hooks/useQuakeFeed';
 import { formatDisplayYmd } from '../utils/archiveApi';
 
@@ -14,6 +27,10 @@ interface WorkspaceToolbarProps {
   onRefreshNow: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  notificationEnabled: boolean;
+  onToggleNotification: () => void;
+  notificationHint: string | null;
+  onDismissNotificationHint: () => void;
   onQuickTestEEW: () => void;
   hasTestRecords: boolean;
   onClearTestRecords: () => void;
@@ -39,6 +56,10 @@ export function WorkspaceToolbar({
   onRefreshNow,
   soundEnabled,
   onToggleSound,
+  notificationEnabled,
+  onToggleNotification,
+  notificationHint,
+  onDismissNotificationHint,
   onQuickTestEEW,
   hasTestRecords,
   onClearTestRecords,
@@ -205,6 +226,43 @@ export function WorkspaceToolbar({
 
           <button
             type="button"
+            role="switch"
+            aria-checked={notificationEnabled}
+            data-testid="eew-notification-switch"
+            onClick={onToggleNotification}
+            aria-label={
+              notificationEnabled
+                ? '緊急地震速報のブラウザプッシュ通知をオフにする'
+                : '緊急地震速報のブラウザプッシュ通知をオンにする'
+            }
+            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+              notificationEnabled
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
+                : 'border-slate-800 bg-[#090D16] text-slate-400 hover:border-slate-700 hover:text-slate-200'
+            }`}
+          >
+            {notificationEnabled ? (
+              <Bell className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+            ) : (
+              <BellOff className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+            )}
+            <span>{notificationEnabled ? '通知 ON' : '通知 OFF'}</span>
+            <span
+              aria-hidden="true"
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                notificationEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  notificationEnabled ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`}
+              />
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={onRefreshNow}
             disabled={isRefreshing}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
@@ -217,6 +275,26 @@ export function WorkspaceToolbar({
           </button>
         </div>
       </div>
+
+      {notificationHint && (
+        <div
+          role="status"
+          data-testid="notification-hint-banner"
+          className="border-t border-amber-500/20 bg-amber-950/30"
+        >
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-1.5 text-xs text-amber-200 sm:px-6">
+            <span>{notificationHint}</span>
+            <button
+              type="button"
+              onClick={onDismissNotificationHint}
+              aria-label="通知設定の案内を閉じる"
+              className="rounded p-0.5 text-amber-300/80 hover:text-amber-100 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

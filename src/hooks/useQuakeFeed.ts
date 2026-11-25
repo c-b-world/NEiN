@@ -8,13 +8,16 @@ import type {
 } from '../types/quake';
 import {
   FALLBACK_SAMPLE_RECORDS,
+  HISTORY_PAGE_LIMIT,
+  INITIAL_HISTORY_PAGES,
+  MAX_HISTORY_RECORDS,
   P2PQUAKE_WS_URL,
-  REQUESTED_API_URL,
+  POLL_HISTORY_LIMIT,
+  buildHistoryApiUrl,
   createTestEEWPayload,
   isEEWRecord,
-  matchesFilter,
+  matchesQuakeSearch,
   mergeQuakeRecords,
-  normalizeP2PQuakeUrl,
   normalizeQuakeRecord,
 } from '../utils/quakeParser';
 import {
@@ -22,6 +25,14 @@ import {
   buildJmaTsunamiArchiveUrl,
 } from '../utils/archiveApi';
 import { playEEWAlertChime } from '../utils/alertSound';
+import {
+  type BrowserNotificationPermission,
+  dispatchEEWBrowserNotification,
+  getBrowserNotificationPermission,
+  loadNotificationEnabled,
+  requestBrowserNotificationPermission,
+  saveNotificationEnabled,
+} from '../utils/browserNotification';
 
 export type WsStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
@@ -35,8 +46,21 @@ export interface UseQuakeFeedResult {
   setFilter: (filter: QuakeFilter) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  dateFrom: string;
+  setDateFrom: (ymd: string) => void;
+  dateTo: string;
+  setDateTo: (ymd: string) => void;
+  minScale: number;
+  setMinScale: (scale: number) => void;
+  minMagnitude: number | null;
+  setMinMagnitude: (mag: number | null) => void;
+  resetSearchFilters: () => void;
+  hasActiveFilters: boolean;
   isLoading: boolean;
   isRefreshing: boolean;
+  isLoadingMore: boolean;
+  canLoadMore: boolean;
+  loadMoreHistory: () => Promise<void>;
   error: string | null;
   lastUpdated: Date | null;
   autoUpdateEnabled: boolean;
@@ -47,6 +71,11 @@ export interface UseQuakeFeedResult {
   wsStatus: WsStatus;
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
+  notificationEnabled: boolean;
+  notificationPermission: BrowserNotificationPermission;
+  notificationHint: string | null;
+  dismissNotificationHint: () => void;
+  toggleNotificationEnabled: () => Promise<void>;
   activeEEW: EEW556 | EEWDetection554 | null;
   dismissEEW: () => void;
   refreshNow: () => Promise<void>;
@@ -64,13 +93,38 @@ export interface UseQuakeFeedResult {
   };
 }
 
+async function fetchHistoryPage(limit: number, offset: number): Promise<P2PQuakeRecord[]> {
+  const endpoint = buildHistoryApiUrl(limit, offset);
+  const res = await fetch(endpoint, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    throw new Error(`API応答エラー (HTTP ${res.status})`);
+  }
+
+  const rawData = (await res.json()) as P2PQuakeRecord[];
+  if (!Array.isArray(rawData)) {
+    throw new Error('地震データの形式が不正です');
+  }
+  return rawData.map((item, idx) => normalizeQuakeRecord(item, offset + idx));
+}
+
 export function useQuakeFeed(): UseQuakeFeedResult {
   const [records, setRecords] = useState<P2PQuakeRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<QuakeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [minScale, setMinScale] = useState(0);
+  const [minMagnitude, setMinMagnitude] = useState<number | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [canLoadMore, setCanLoadMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
@@ -78,6 +132,14 @@ export function useQuakeFeed(): UseQuakeFeedResult {
   const [nextRefreshIn, setNextRefreshIn] = useState(10);
   const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const [notificationPermission, setNotificationPermission] =
+    useState<BrowserNotificationPermission>(() => getBrowserNotificationPermission());
+  const [notificationEnabled, setNotificationEnabled] = useState<boolean>(
+    () => loadNotificationEnabled() && getBrowserNotificationPermission() === 'granted'
+  );
+  const [notificationHint, setNotificationHint] = useState<string | null>(null);
+
   const [activeEEW, setActiveEEW] = useState<EEW556 | EEWDetection554 | null>(null);
 
   const [archiveDate, setArchiveDate] = useState<string | null>(null);
@@ -87,8 +149,11 @@ export function useQuakeFeed(): UseQuakeFeedResult {
 
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initialLoadDoneRef = useRef(false);
+  const nextOffsetRef = useRef(0);
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
+  const notificationEnabledRef = useRef(notificationEnabled);
+  notificationEnabledRef.current = notificationEnabled;
   const archiveDateRef = useRef<string | null>(null);
   archiveDateRef.current = archiveDate;
 
@@ -97,6 +162,63 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     if (soundEnabledRef.current) {
       playEEWAlertChime(eew.code === 556 && eew.cancelled);
     }
+    dispatchEEWBrowserNotification(eew, notificationEnabledRef.current);
+  }, []);
+
+  const toggleNotificationEnabled = useCallback(async () => {
+    if (notificationEnabledRef.current) {
+      setNotificationEnabled(false);
+      saveNotificationEnabled(false);
+      setNotificationHint(null);
+      return;
+    }
+
+    const currentPerm = getBrowserNotificationPermission();
+    setNotificationPermission(currentPerm);
+
+    if (currentPerm === 'unsupported') {
+      setNotificationEnabled(false);
+      saveNotificationEnabled(false);
+      setNotificationHint('お使いのブラウザまたは表示環境は通知APIに対応していません。');
+      return;
+    }
+
+    if (currentPerm === 'denied') {
+      setNotificationEnabled(false);
+      saveNotificationEnabled(false);
+      setNotificationHint(
+        'ブラウザで通知がブロックされています。サイト設定から通知を許可するとプッシュ通知を受信できます。'
+      );
+      return;
+    }
+
+    if (currentPerm === 'granted') {
+      setNotificationEnabled(true);
+      saveNotificationEnabled(true);
+      setNotificationHint(null);
+      return;
+    }
+
+    const requested = await requestBrowserNotificationPermission();
+    setNotificationPermission(requested);
+
+    if (requested === 'granted') {
+      setNotificationEnabled(true);
+      saveNotificationEnabled(true);
+      setNotificationHint(null);
+    } else {
+      setNotificationEnabled(false);
+      saveNotificationEnabled(false);
+      setNotificationHint(
+        requested === 'denied'
+          ? '通知が拒否されました。ブラウザのサイト設定から許可すると緊急地震速報の通知を受け取れます。'
+          : '通知の許可が完了しなかったため、プッシュ通知はOFFのままです。'
+      );
+    }
+  }, []);
+
+  const dismissNotificationHint = useCallback(() => {
+    setNotificationHint(null);
   }, []);
 
   const fetchHistory = useCallback(
@@ -109,25 +231,42 @@ export function useQuakeFeed(): UseQuakeFeedResult {
       setError(null);
 
       try {
-        const endpoint = normalizeP2PQuakeUrl(REQUESTED_API_URL);
-        const res = await fetch(endpoint, {
-          headers: { Accept: 'application/json' },
-          cache: 'no-store',
-        });
+        let fetchedItems: P2PQuakeRecord[] = [];
 
-        if (!res.ok) {
-          throw new Error(`API応答エラー (HTTP ${res.status})`);
-        }
+        if (isInitial) {
+          const offsets = Array.from(
+            { length: INITIAL_HISTORY_PAGES },
+            (_, idx) => idx * HISTORY_PAGE_LIMIT
+          );
+          const settled = await Promise.allSettled(
+            offsets.map((offset) => fetchHistoryPage(HISTORY_PAGE_LIMIT, offset))
+          );
 
-        const rawData = (await res.json()) as P2PQuakeRecord[];
-        if (!Array.isArray(rawData)) {
-          throw new Error('地震データの形式が不正です');
+          const firstPage = settled[0];
+          if (firstPage.status === 'rejected') {
+            throw firstPage.reason;
+          }
+
+          let totalFetchedRaw = 0;
+          let lastPageWasFull = true;
+          for (const result of settled) {
+            if (result.status === 'fulfilled') {
+              fetchedItems = fetchedItems.concat(result.value);
+              totalFetchedRaw += result.value.length;
+              lastPageWasFull = result.value.length >= HISTORY_PAGE_LIMIT;
+            } else {
+              lastPageWasFull = false;
+            }
+          }
+          nextOffsetRef.current = totalFetchedRaw;
+          setCanLoadMore(lastPageWasFull && totalFetchedRaw < MAX_HISTORY_RECORDS);
+        } else {
+          fetchedItems = await fetchHistoryPage(POLL_HISTORY_LIMIT, 0);
         }
-        const data = rawData.map((item, idx) => normalizeQuakeRecord(item, idx));
 
         // Detect newly arrived EEW events after initial hydration
         if (initialLoadDoneRef.current) {
-          for (const item of data) {
+          for (const item of fetchedItems) {
             if (!seenIdsRef.current.has(item.id) && isEEWRecord(item)) {
               raiseEEWAlert(item);
               break;
@@ -135,18 +274,18 @@ export function useQuakeFeed(): UseQuakeFeedResult {
           }
         }
 
-        for (const item of data) {
+        for (const item of fetchedItems) {
           seenIdsRef.current.add(item.id);
         }
         initialLoadDoneRef.current = true;
 
-        setRecords((prev) => mergeQuakeRecords(data, prev, 30));
+        setRecords((prev) => mergeQuakeRecords(fetchedItems, prev, MAX_HISTORY_RECORDS));
 
         if (!archiveDateRef.current) {
           setSelectedId((prevSelected) => {
             if (prevSelected) return prevSelected;
-            const firstQuake = data.find((r) => r.code === 551);
-            return firstQuake?.id ?? data[0]?.id ?? null;
+            const firstQuake = fetchedItems.find((r) => r.code === 551);
+            return firstQuake?.id ?? fetchedItems[0]?.id ?? null;
           });
         }
 
@@ -171,6 +310,41 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     },
     [pollIntervalSec, raiseEEWAlert]
   );
+
+  const loadMoreHistory = useCallback(async () => {
+    if (isLoadingMore || !canLoadMore || archiveDateRef.current !== null) {
+      return;
+    }
+    setIsLoadingMore(true);
+    setError(null);
+
+    try {
+      const offset = nextOffsetRef.current;
+      const olderItems = await fetchHistoryPage(HISTORY_PAGE_LIMIT, offset);
+      for (const item of olderItems) {
+        seenIdsRef.current.add(item.id);
+      }
+      nextOffsetRef.current = offset + olderItems.length;
+
+      setRecords((prev) => {
+        const merged = mergeQuakeRecords(olderItems, prev, MAX_HISTORY_RECORDS);
+        if (
+          olderItems.length < HISTORY_PAGE_LIMIT ||
+          nextOffsetRef.current >= MAX_HISTORY_RECORDS ||
+          merged.length >= MAX_HISTORY_RECORDS
+        ) {
+          setCanLoadMore(false);
+        }
+        return merged;
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : '追加履歴の取得に失敗しました';
+      setError(msg);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [canLoadMore, isLoadingMore]);
 
   const fetchArchiveDate = useCallback(async (ymd: string) => {
     setArchiveDate(ymd);
@@ -232,6 +406,15 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     );
   }, [records]);
 
+  const resetSearchFilters = useCallback(() => {
+    setFilter('all');
+    setSearchQuery('');
+    setDateFrom('');
+    setDateTo('');
+    setMinScale(0);
+    setMinMagnitude(null);
+  }, []);
+
   // Initial load
   useEffect(() => {
     void fetchHistory(true);
@@ -290,7 +473,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
             const isNew = !seenIdsRef.current.has(incoming.id);
             seenIdsRef.current.add(incoming.id);
 
-            setRecords((prev) => mergeQuakeRecords([incoming], prev, 30));
+            setRecords((prev) => mergeQuakeRecords([incoming], prev, MAX_HISTORY_RECORDS));
             setLastUpdated(new Date());
 
             if (isNew && isEEWRecord(incoming)) {
@@ -341,7 +524,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
       setArchiveRecords([]);
       setArchiveError(null);
       setArchiveLoading(false);
-      setRecords((prev) => mergeQuakeRecords([payload], prev, 30));
+      setRecords((prev) => mergeQuakeRecords([payload], prev, MAX_HISTORY_RECORDS));
       setSelectedId(payload.id);
       setLastUpdated(new Date());
       raiseEEWAlert(payload);
@@ -392,39 +575,38 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     };
   }, [activeRecords]);
 
+  const hasActiveFilters = useMemo(() => {
+    return Boolean(
+      filter !== 'all' ||
+        searchQuery.trim() ||
+        dateFrom ||
+        dateTo ||
+        minScale > 0 ||
+        (minMagnitude !== null && minMagnitude > 0)
+    );
+  }, [dateFrom, dateTo, filter, minMagnitude, minScale, searchQuery]);
+
   const filteredRecords = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return activeRecords.filter((r) => {
-      if (!matchesFilter(r, filter)) return false;
-      if (!q) return true;
-      if (r.code === 551) {
-        const name = r.earthquake.hypocenter.name?.toLowerCase() ?? '';
-        const prefs = r.points?.map((p) => `${p.pref}${p.addr}`.toLowerCase()).join(' ') ?? '';
-        return name.includes(q) || prefs.includes(q);
-      }
-      if (r.code === 556) {
-        const name = r.earthquake?.hypocenter.name?.toLowerCase() ?? '';
-        const areas = r.areas?.map((a) => `${a.pref}${a.name}`.toLowerCase()).join(' ') ?? '';
-        return name.includes(q) || areas.includes(q) || '緊急地震速報'.includes(q);
-      }
-      if (r.code === 554) {
-        return '緊急地震速報'.includes(q) || '発表検出'.includes(q);
-      }
-      if (r.code === 552) {
-        return '津波予報'.includes(q);
-      }
-      return `地域コード ${r.area}`.includes(q) || '地震感知'.includes(q);
-    });
-  }, [activeRecords, filter, searchQuery]);
+    const criteria = {
+      filter,
+      searchQuery,
+      dateFrom,
+      dateTo,
+      minScale,
+      minMagnitude,
+    };
+    return activeRecords.filter((r) => matchesQuakeSearch(r, criteria));
+  }, [activeRecords, dateFrom, dateTo, filter, minMagnitude, minScale, searchQuery]);
 
   const selectedRecord = useMemo(() => {
     if (!activeRecords.length) return null;
-    return (
-      activeRecords.find((r) => r.id === selectedId) ??
-      filteredRecords[0] ??
-      activeRecords[0]
-    );
-  }, [activeRecords, filteredRecords, selectedId]);
+    const inFiltered = filteredRecords.find((r) => r.id === selectedId);
+    if (inFiltered) return inFiltered;
+    if (hasActiveFilters) {
+      return filteredRecords[0] ?? null;
+    }
+    return activeRecords.find((r) => r.id === selectedId) ?? activeRecords[0];
+  }, [activeRecords, filteredRecords, hasActiveFilters, selectedId]);
 
   const hasTestRecords = useMemo(() => records.some((r) => r.isTest), [records]);
 
@@ -438,8 +620,21 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     setFilter,
     searchQuery,
     setSearchQuery,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    minScale,
+    setMinScale,
+    minMagnitude,
+    setMinMagnitude,
+    resetSearchFilters,
+    hasActiveFilters,
     isLoading: archiveDate !== null ? archiveLoading : isLoading,
     isRefreshing: archiveDate !== null ? archiveLoading : isRefreshing,
+    isLoadingMore,
+    canLoadMore: archiveDate === null && canLoadMore,
+    loadMoreHistory,
     error: archiveDate !== null ? archiveError : error,
     lastUpdated,
     autoUpdateEnabled,
@@ -450,6 +645,11 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     wsStatus,
     soundEnabled,
     setSoundEnabled,
+    notificationEnabled,
+    notificationPermission,
+    notificationHint,
+    dismissNotificationHint,
+    toggleNotificationEnabled,
     activeEEW,
     dismissEEW,
     refreshNow,
