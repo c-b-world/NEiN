@@ -9,7 +9,7 @@ files:
   - package.json
 asar: true
 win:
-  icon: favicon.ico
+icon: favicon.ico
   target:
     - target: nsis
       arch:
