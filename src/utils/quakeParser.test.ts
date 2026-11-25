@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   REQUESTED_API_URL,
   createTestEEWPayload,
+  extractMunicipalityName,
   formatDepth,
   formatMagnitude,
   formatQuakeForClipboard,
@@ -37,21 +38,36 @@ test('formatDepth and formatMagnitude handle edge cases', () => {
   assert.equal(formatMagnitude(-1), 'M不明');
 });
 
-test('formatQuakeForClipboard formats JMA 551 earthquake cleanly', () => {
+test('extractMunicipalityName handles standard, ward, pref-prefixed, and compound names', () => {
+  assert.equal(extractMunicipalityName('水俣市陣内'), '水俣市');
+  assert.equal(extractMunicipalityName('日南市南郷町南町'), '日南市');
+  assert.equal(extractMunicipalityName('千代田区大手町'), '千代田区');
+  assert.equal(extractMunicipalityName('新潟秋葉区程島'), '新潟秋葉区');
+  assert.equal(extractMunicipalityName('上越市安塚区安塚'), '上越市');
+  assert.equal(extractMunicipalityName('福島金山町川口'), '福島金山町');
+  assert.equal(extractMunicipalityName('福島昭和村下中津川'), '福島昭和村');
+  assert.equal(extractMunicipalityName('田村市常葉町'), '田村市');
+  assert.equal(extractMunicipalityName('四日市市諏訪町'), '四日市市');
+  assert.equal(extractMunicipalityName('十日町市千歳町'), '十日町市');
+  assert.equal(extractMunicipalityName('新潟十日町市本町'), '新潟十日町市');
+  assert.equal(extractMunicipalityName('東京都２３区', true), '東京都２３区');
+});
+
+test('formatQuakeForClipboard formats JMA 551 earthquake cleanly without truncating municipalities', () => {
   const sample: JMAQuake551 = {
     id: 'q1',
     code: 551,
     time: '2026/11/25 08:44:35.416',
     earthquake: {
       domesticTsunami: 'None',
-      maxScale: 40,
+      maxScale: 50,
       time: '2026/11/25 08:40:00',
       hypocenter: {
         name: '東京湾',
         latitude: 35.5,
         longitude: 139.9,
         depth: 40,
-        magnitude: 4.8,
+        magnitude: 5.8,
       },
     },
     issue: {
@@ -60,17 +76,33 @@ test('formatQuakeForClipboard formats JMA 551 earthquake cleanly', () => {
       type: 'DetailScale',
     },
     points: [
-      { pref: '東京都', addr: '千代田区大手町', isArea: false, scale: 40 },
+      { pref: '東京都', addr: '千代田区大手町', isArea: false, scale: 50 },
+      { pref: '東京都', addr: '中央区日本橋兜町', isArea: false, scale: 50 },
+      { pref: '東京都', addr: '港区芝公園', isArea: false, scale: 45 },
+      { pref: '東京都', addr: '新宿区西新宿', isArea: false, scale: 40 },
+      { pref: '東京都', addr: '文京区本郷', isArea: false, scale: 30 },
+      { pref: '千葉県', addr: '千葉中央区中央港', isArea: false, scale: 20 },
+      { pref: '千葉県', addr: '市川市八幡', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '市原市姉崎', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '船橋市湊町', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '松戸市根本', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '柏市柏', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '成田市花崎町', isArea: false, scale: 10 },
+      { pref: '千葉県', addr: '成田市松子', isArea: false, scale: 10 },
     ],
   };
 
   const text = formatQuakeForClipboard(sample);
   assert.match(text, /【地震情報】各地の震度に関する情報/);
   assert.match(text, /震源地：東京湾/);
-  assert.match(text, /最大震度：震度4/);
-  assert.match(text, /規模：M4\.8/);
-  assert.match(text, /深さ：約40km/);
-  assert.match(text, /東京都（千代田区大手町）/);
+  assert.match(text, /最大震度：震度5強/);
+  assert.match(text, /〔震度5強〕\n█ 東京都\n千代田区　中央区/);
+  assert.match(text, /〔震度5弱〕\n█ 東京都\n港区/);
+  assert.match(text, /〔震度4〕\n█ 東京都\n新宿区/);
+  assert.match(text, /〔震度3〕\n█ 東京都\n文京区/);
+  assert.match(text, /〔震度2〕\n█ 千葉県\n千葉中央区/);
+  assert.match(text, /〔震度1〕\n█ 千葉県\n市川市　市原市　船橋市　松戸市　柏市　成田市/);
+  assert.doesNotMatch(text, /他/);
 });
 
 test('createTestEEWPayload creates valid test EEW alerts in JST for all presets', () => {

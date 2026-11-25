@@ -346,6 +346,61 @@ export function groupPointsByPrefAndScale(points?: QuakePoint[]): Array<{
     }));
 }
 
+const PREFECTURE_PREFIX_PATTERN =
+  '^(?:北海道|青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|東京|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|京都|大阪|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)?';
+
+const COMPOUND_MUNICIPALITY_REGEX = new RegExp(
+  `${PREFECTURE_PREFIX_PATTERN}(四日市市|廿日市市|野々市市|東村山市|武蔵村山市|市川三郷町|十日町市|市原市|市川市|市川町|市貝町|大町市|大町町|町田市|田村市|大村市|羽村市|村上市|村山市|村田町|玉村町)`
+);
+
+export function extractMunicipalityName(addr: string, isArea = false): string {
+  const trimmed = addr.trim();
+  if (!trimmed || isArea) return trimmed;
+
+  const compoundMatch = trimmed.match(COMPOUND_MUNICIPALITY_REGEX);
+  if (compoundMatch) {
+    return compoundMatch[0];
+  }
+
+  const match = trimmed.match(/^(.+?[市区町村])/);
+  return match ? match[1] : trimmed;
+}
+
+export function groupMunicipalitiesByPrefAndScale(points?: QuakePoint[]): Array<{
+  scale: number;
+  scaleLabel: string;
+  prefectures: Array<{ pref: string; cities: string[] }>;
+}> {
+  if (!points || points.length === 0) return [];
+  const scaleMap = new Map<number, Map<string, string[]>>();
+
+  for (const pt of points) {
+    if (!scaleMap.has(pt.scale)) {
+      scaleMap.set(pt.scale, new Map());
+    }
+    const prefMap = scaleMap.get(pt.scale)!;
+    if (!prefMap.has(pt.pref)) {
+      prefMap.set(pt.pref, []);
+    }
+    const list = prefMap.get(pt.pref)!;
+    const city = extractMunicipalityName(pt.addr, pt.isArea);
+    if (city && !list.includes(city)) {
+      list.push(city);
+    }
+  }
+
+  return Array.from(scaleMap.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([scale, prefMap]) => ({
+      scale,
+      scaleLabel: getScalePresentation(scale).label,
+      prefectures: Array.from(prefMap.entries()).map(([pref, cities]) => ({
+        pref,
+        cities,
+      })),
+    }));
+}
+
 export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
   const testPrefix = record.isTest ? '【テスト配信】' : '';
 
@@ -362,15 +417,19 @@ export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
       `津波：${translateTsunamiStatus(eq.domesticTsunami)}`,
     ];
 
-    const grouped = groupPointsByPrefAndScale(record.points);
+    const grouped = groupMunicipalitiesByPrefAndScale(record.points);
     if (grouped.length > 0) {
       lines.push('', '■ 各地の震度');
-      for (const group of grouped.slice(0, 4)) {
-        const prefSummary = group.prefectures
-          .map((p) => `${p.pref}（${p.addrs.slice(0, 5).join('・')}${p.addrs.length > 5 ? ' 他' : ''}）`)
-          .join(' / ');
-        lines.push(`${group.scaleLabel}：${prefSummary}`);
-      }
+      grouped.forEach((group, groupIndex) => {
+        if (groupIndex > 0) {
+          lines.push('');
+        }
+        lines.push(`〔${group.scaleLabel}〕`);
+        for (const p of group.prefectures) {
+          lines.push(`█ ${p.pref}`);
+          lines.push(p.cities.join('　'));
+        }
+      });
     }
 
     if (record.comments?.freeFormComment) {

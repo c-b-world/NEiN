@@ -234,7 +234,7 @@ export function QuakeDetailPanel({
           </div>
           <pre
             data-testid="copy-preview-text"
-            className="flex-1 overflow-auto whitespace-pre-wrap break-words bg-[#080C14] p-4 font-mono text-xs leading-relaxed text-slate-300"
+            className="max-h-[380px] flex-1 overflow-auto whitespace-pre-wrap break-words bg-[#080C14] p-4 font-mono text-xs leading-relaxed text-slate-300"
           >
             {formattedCopyText}
           </pre>
