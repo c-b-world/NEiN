@@ -1,0 +1,334 @@
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { P2PQuakeRecord } from '../types/quake';
+import {
+  type DayQuakeSummary,
+  buildCalendarMonthGrid,
+  buildJmaQuakeArchiveUrl,
+  getJstTodayParts,
+  getMonthRangeYmd,
+  summarizeMonthQuakes,
+} from '../utils/archiveApi';
+import { getScalePresentation, normalizeQuakeRecord } from '../utils/quakeParser';
+
+interface ArchiveCalendarProps {
+  selectedDate: string | null;
+  onSelectDate: (ymd: string) => void;
+  onExitArchive: () => void;
+  onClose?: () => void;
+}
+
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+function getSeverityDotClass(maxScale: number): string {
+  if (maxScale >= 45) return 'bg-red-400';
+  if (maxScale >= 30) return 'bg-amber-400';
+  return 'bg-sky-400';
+}
+
+export function ArchiveCalendar({
+  selectedDate,
+  onSelectDate,
+  onExitArchive,
+  onClose,
+}: ArchiveCalendarProps) {
+  const today = useMemo(() => getJstTodayParts(), []);
+  const initialDateParts = useMemo(() => {
+    if (selectedDate) {
+      const [y, m] = selectedDate.split('-').map(Number);
+      if (y && m) return { year: y, month: m };
+    }
+    return { year: today.year, month: today.month };
+  }, [selectedDate, today.year, today.month]);
+
+  const [viewYear, setViewYear] = useState(initialDateParts.year);
+  const [viewMonth, setViewMonth] = useState(initialDateParts.month);
+  const [monthSummary, setMonthSummary] = useState<Record<string, DayQuakeSummary>>({});
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const cacheRef = useRef<Map<string, Record<string, DayQuakeSummary>>>(new Map());
+
+  const monthKey = `${viewYear}-${String(viewMonth).padStart(2, '0')}`;
+
+  useEffect(() => {
+    const cached = cacheRef.current.get(monthKey);
+    if (cached) {
+      setMonthSummary(cached);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingMonth(true);
+    const { sinceYmd, untilYmd } = getMonthRangeYmd(viewYear, viewMonth);
+    const url = buildJmaQuakeArchiveUrl(sinceYmd, untilYmd, 100, 0);
+
+    fetch(url, { headers: { Accept: 'application/json' } })
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const raw = (await res.json()) as P2PQuakeRecord[];
+        return Array.isArray(raw)
+          ? raw.map((item, idx) => normalizeQuakeRecord(item, idx))
+          : [];
+      })
+      .then((records) => {
+        if (cancelled) return;
+        const summary = summarizeMonthQuakes(records);
+        cacheRef.current.set(monthKey, summary);
+        setMonthSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setMonthSummary({});
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMonth(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [monthKey, viewYear, viewMonth]);
+
+  const cells = useMemo(
+    () => buildCalendarMonthGrid(viewYear, viewMonth),
+    [viewYear, viewMonth]
+  );
+
+  const isAtCurrentMonth =
+    viewYear > today.year || (viewYear === today.year && viewMonth >= today.month);
+
+  const handlePrevMonth = () => {
+    if (viewMonth === 1) {
+      setViewYear((y) => y - 1);
+      setViewMonth(12);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (isAtCurrentMonth) return;
+    if (viewMonth === 12) {
+      setViewYear((y) => y + 1);
+      setViewMonth(1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const yearOptions = useMemo(() => {
+    const list: number[] = [];
+    for (let y = today.year; y >= 2019; y--) {
+      list.push(y);
+    }
+    return list;
+  }, [today.year]);
+
+  const monthOptions = useMemo(() => {
+    const maxMonth = viewYear === today.year ? today.month : 12;
+    return Array.from({ length: maxMonth }, (_, i) => i + 1);
+  }, [viewYear, today.year, today.month]);
+
+  const handleSelectCell = (ymd: string) => {
+    onSelectDate(ymd);
+    onClose?.();
+  };
+
+  return (
+    <div
+      data-testid="archive-calendar"
+      role="region"
+      aria-label="過去地震データ カレンダー選択"
+      className="mt-3 rounded-lg border border-slate-700/90 bg-[#090D16] p-3 shadow-xl"
+    >
+      {/* Month / Year Navigation */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={handlePrevMonth}
+          aria-label="前の月へ"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
+
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="archive-cal-year" className="sr-only">
+            年を選択
+          </label>
+          <select
+            id="archive-cal-year"
+            value={viewYear}
+            onChange={(e) => {
+              const nextY = Number(e.target.value);
+              setViewYear(nextY);
+              if (nextY === today.year && viewMonth > today.month) {
+                setViewMonth(today.month);
+              }
+            }}
+            className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-mono font-semibold text-slate-100 focus:border-sky-500 focus:outline-none cursor-pointer"
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}年
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="archive-cal-month" className="sr-only">
+            月を選択
+          </label>
+          <select
+            id="archive-cal-month"
+            value={viewMonth}
+            onChange={(e) => setViewMonth(Number(e.target.value))}
+            className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-mono font-semibold text-slate-100 focus:border-sky-500 focus:outline-none cursor-pointer"
+          >
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}月
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleNextMonth}
+          disabled={isAtCurrentMonth}
+          aria-label="次の月へ"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Weekday Labels */}
+      <div className="mt-2.5 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold">
+        {WEEKDAYS.map((wd, idx) => (
+          <div
+            key={wd}
+            className={
+              idx === 0
+                ? 'text-red-400/85'
+                : idx === 6
+                ? 'text-sky-400/85'
+                : 'text-slate-500'
+            }
+          >
+            {wd}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Days Grid */}
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {cells.map((cell) => {
+          const isSelected = cell.ymd === selectedDate;
+          const summary = cell.inCurrentMonth ? monthSummary[cell.ymd] : undefined;
+          const scaleLabel =
+            summary && summary.maxScale > 0
+              ? getScalePresentation(summary.maxScale).label
+              : null;
+
+          const ariaParts = [`${cell.year}年${cell.month}月${cell.day}日`];
+          if (summary) {
+            ariaParts.push(`${summary.count}件`);
+            if (scaleLabel) ariaParts.push(`最大${scaleLabel}`);
+          }
+
+          return (
+            <button
+              key={cell.ymd}
+              type="button"
+              disabled={cell.isFuture}
+              onClick={() => handleSelectCell(cell.ymd)}
+              title={
+                summary
+                  ? `${cell.ymd}: ${summary.count}件${scaleLabel ? ` (最大${scaleLabel})` : ''}`
+                  : cell.ymd
+              }
+              aria-label={ariaParts.join(' ')}
+              aria-pressed={isSelected}
+              className={`relative flex h-8 flex-col items-center justify-center rounded text-xs font-mono tabular-nums transition-colors ${
+                cell.isFuture
+                  ? 'text-slate-700 cursor-not-allowed'
+                  : isSelected
+                  ? 'bg-sky-500 font-bold text-slate-950 cursor-pointer'
+                  : cell.inCurrentMonth
+                  ? 'text-slate-200 hover:bg-slate-800 cursor-pointer'
+                  : 'text-slate-600 hover:bg-slate-800/50 cursor-pointer'
+              } ${
+                cell.isToday && !isSelected
+                  ? 'ring-1 ring-inset ring-sky-400/70'
+                  : ''
+              }`}
+            >
+              <span className="leading-none">{cell.day}</span>
+              {summary && (
+                <span
+                  aria-hidden="true"
+                  className={`mt-0.5 h-1 w-1 rounded-full ${
+                    isSelected
+                      ? 'bg-slate-950'
+                      : getSeverityDotClass(summary.maxScale)
+                  }`}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Footer / Legend / Actions */}
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 text-[11px]">
+        <div className="flex items-center gap-2.5 text-slate-400">
+          {loadingMonth ? (
+            <span>月間履歴を確認中...</span>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+                震度1-2
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                3-4
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-400" aria-hidden="true" />
+                5弱+
+              </span>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setViewYear(today.year);
+              setViewMonth(today.month);
+              handleSelectCell(today.ymd);
+            }}
+            className="rounded border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
+          >
+            今日を取得
+          </button>
+
+          {selectedDate && (
+            <button
+              type="button"
+              onClick={() => {
+                onExitArchive();
+                onClose?.();
+              }}
+              className="inline-flex items-center gap-1 rounded border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/20 cursor-pointer"
+            >
+              <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              <span>リアルタイム</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

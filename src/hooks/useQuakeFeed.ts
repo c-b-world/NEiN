@@ -17,6 +17,10 @@ import {
   normalizeP2PQuakeUrl,
   normalizeQuakeRecord,
 } from '../utils/quakeParser';
+import {
+  buildJmaQuakeArchiveUrl,
+  buildJmaTsunamiArchiveUrl,
+} from '../utils/archiveApi';
 import { playEEWAlertChime } from '../utils/alertSound';
 
 export type WsStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
@@ -49,6 +53,9 @@ export interface UseQuakeFeedResult {
   triggerTestEEW: (preset: TestEEWPreset) => void;
   clearTestRecords: () => void;
   hasTestRecords: boolean;
+  archiveDate: string | null;
+  selectArchiveDate: (ymd: string) => Promise<void>;
+  exitArchiveMode: () => void;
   counts: {
     all: number;
     quake: number;
@@ -73,10 +80,17 @@ export function useQuakeFeed(): UseQuakeFeedResult {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeEEW, setActiveEEW] = useState<EEW556 | EEWDetection554 | null>(null);
 
+  const [archiveDate, setArchiveDate] = useState<string | null>(null);
+  const [archiveRecords, setArchiveRecords] = useState<P2PQuakeRecord[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initialLoadDoneRef = useRef(false);
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
+  const archiveDateRef = useRef<string | null>(null);
+  archiveDateRef.current = archiveDate;
 
   const raiseEEWAlert = useCallback((eew: EEW556 | EEWDetection554) => {
     setActiveEEW(eew);
@@ -128,11 +142,13 @@ export function useQuakeFeed(): UseQuakeFeedResult {
 
         setRecords((prev) => mergeQuakeRecords(data, prev, 30));
 
-        setSelectedId((prevSelected) => {
-          if (prevSelected) return prevSelected;
-          const firstQuake = data.find((r) => r.code === 551);
-          return firstQuake?.id ?? data[0]?.id ?? null;
-        });
+        if (!archiveDateRef.current) {
+          setSelectedId((prevSelected) => {
+            if (prevSelected) return prevSelected;
+            const firstQuake = data.find((r) => r.code === 551);
+            return firstQuake?.id ?? data[0]?.id ?? null;
+          });
+        }
 
         setLastUpdated(new Date());
         setNextRefreshIn(pollIntervalSec);
@@ -145,7 +161,9 @@ export function useQuakeFeed(): UseQuakeFeedResult {
           if (prev.length > 0) return prev;
           return FALLBACK_SAMPLE_RECORDS;
         });
-        setSelectedId((prev) => prev ?? FALLBACK_SAMPLE_RECORDS[0]?.id ?? null);
+        if (!archiveDateRef.current) {
+          setSelectedId((prev) => prev ?? FALLBACK_SAMPLE_RECORDS[0]?.id ?? null);
+        }
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -154,14 +172,74 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     [pollIntervalSec, raiseEEWAlert]
   );
 
+  const fetchArchiveDate = useCallback(async (ymd: string) => {
+    setArchiveDate(ymd);
+    setArchiveLoading(true);
+    setArchiveError(null);
+    setFilter('all');
+
+    try {
+      const quakeUrl = buildJmaQuakeArchiveUrl(ymd, ymd, 100, 0);
+      const tsunamiUrl = buildJmaTsunamiArchiveUrl(ymd, ymd, 100, 0);
+
+      const [quakeRes, tsunamiRes] = await Promise.all([
+        fetch(quakeUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' }),
+        fetch(tsunamiUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' }),
+      ]);
+
+      if (!quakeRes.ok) {
+        throw new Error(`過去データの取得に失敗しました (HTTP ${quakeRes.status})`);
+      }
+
+      const rawQuakes = (await quakeRes.json()) as P2PQuakeRecord[];
+      const rawTsunamis = tsunamiRes.ok
+        ? ((await tsunamiRes.json()) as P2PQuakeRecord[])
+        : [];
+
+      const combined = [
+        ...(Array.isArray(rawQuakes) ? rawQuakes : []),
+        ...(Array.isArray(rawTsunamis) ? rawTsunamis : []),
+      ]
+        .map((item, idx) => normalizeQuakeRecord(item, idx))
+        .sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+
+      if (archiveDateRef.current !== ymd) return;
+
+      setArchiveRecords(combined);
+      setSelectedId(combined[0]?.id ?? null);
+    } catch (err) {
+      if (archiveDateRef.current !== ymd) return;
+      const msg =
+        err instanceof Error ? err.message : '過去データの取得に失敗しました';
+      setArchiveError(msg);
+      setArchiveRecords([]);
+      setSelectedId(null);
+    } finally {
+      if (archiveDateRef.current === ymd) {
+        setArchiveLoading(false);
+      }
+    }
+  }, []);
+
+  const exitArchiveMode = useCallback(() => {
+    setArchiveDate(null);
+    setArchiveRecords([]);
+    setArchiveError(null);
+    setArchiveLoading(false);
+    setFilter('all');
+    setSelectedId(
+      records.find((r) => r.code === 551)?.id ?? records[0]?.id ?? null
+    );
+  }, [records]);
+
   // Initial load
   useEffect(() => {
     void fetchHistory(true);
   }, [fetchHistory]);
 
-  // Countdown + auto-polling interval (no side effects inside state updater)
+  // Countdown + auto-polling interval (paused during archive date inspection)
   useEffect(() => {
-    if (!autoUpdateEnabled) {
+    if (!autoUpdateEnabled || archiveDate !== null) {
       return;
     }
 
@@ -180,7 +258,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [autoUpdateEnabled, pollIntervalSec, fetchHistory]);
+  }, [autoUpdateEnabled, pollIntervalSec, fetchHistory, archiveDate]);
 
   // Real-time WebSocket stream from P2PQuake v2
   useEffect(() => {
@@ -259,6 +337,10 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     (preset: TestEEWPreset) => {
       const payload = createTestEEWPayload(preset);
       seenIdsRef.current.add(payload.id);
+      setArchiveDate(null);
+      setArchiveRecords([]);
+      setArchiveError(null);
+      setArchiveLoading(false);
       setRecords((prev) => mergeQuakeRecords([payload], prev, 30));
       setSelectedId(payload.id);
       setLastUpdated(new Date());
@@ -284,29 +366,35 @@ export function useQuakeFeed(): UseQuakeFeedResult {
   }, []);
 
   const refreshNow = useCallback(async () => {
-    await fetchHistory(false);
-  }, [fetchHistory]);
+    if (archiveDateRef.current) {
+      await fetchArchiveDate(archiveDateRef.current);
+    } else {
+      await fetchHistory(false);
+    }
+  }, [fetchArchiveDate, fetchHistory]);
+
+  const activeRecords = archiveDate !== null ? archiveRecords : records;
 
   const counts = useMemo(() => {
     let quake = 0;
     let eew = 0;
     let other = 0;
-    for (const r of records) {
+    for (const r of activeRecords) {
       if (r.code === 551) quake++;
       else if (r.code === 554 || r.code === 556) eew++;
       else other++;
     }
     return {
-      all: records.length,
+      all: activeRecords.length,
       quake,
       eew,
       other,
     };
-  }, [records]);
+  }, [activeRecords]);
 
   const filteredRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return records.filter((r) => {
+    return activeRecords.filter((r) => {
       if (!matchesFilter(r, filter)) return false;
       if (!q) return true;
       if (r.code === 551) {
@@ -327,17 +415,21 @@ export function useQuakeFeed(): UseQuakeFeedResult {
       }
       return `地域コード ${r.area}`.includes(q) || '地震感知'.includes(q);
     });
-  }, [records, filter, searchQuery]);
+  }, [activeRecords, filter, searchQuery]);
 
   const selectedRecord = useMemo(() => {
-    if (!records.length) return null;
-    return records.find((r) => r.id === selectedId) ?? filteredRecords[0] ?? records[0];
-  }, [records, filteredRecords, selectedId]);
+    if (!activeRecords.length) return null;
+    return (
+      activeRecords.find((r) => r.id === selectedId) ??
+      filteredRecords[0] ??
+      activeRecords[0]
+    );
+  }, [activeRecords, filteredRecords, selectedId]);
 
   const hasTestRecords = useMemo(() => records.some((r) => r.isTest), [records]);
 
   return {
-    records,
+    records: activeRecords,
     filteredRecords,
     selectedRecord,
     selectedId: selectedRecord?.id ?? null,
@@ -346,9 +438,9 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     setFilter,
     searchQuery,
     setSearchQuery,
-    isLoading,
-    isRefreshing,
-    error,
+    isLoading: archiveDate !== null ? archiveLoading : isLoading,
+    isRefreshing: archiveDate !== null ? archiveLoading : isRefreshing,
+    error: archiveDate !== null ? archiveError : error,
     lastUpdated,
     autoUpdateEnabled,
     setAutoUpdateEnabled,
@@ -364,6 +456,9 @@ export function useQuakeFeed(): UseQuakeFeedResult {
     triggerTestEEW,
     clearTestRecords,
     hasTestRecords,
+    archiveDate,
+    selectArchiveDate: fetchArchiveDate,
+    exitArchiveMode,
     counts,
   };
 }

@@ -1,6 +1,7 @@
-import { Check, Copy, Search, X } from 'lucide-react';
+import { Calendar, Check, Copy, RotateCcw, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import type { P2PQuakeRecord, QuakeFilter } from '../types/quake';
+import { formatJapaneseDateHeading } from '../utils/archiveApi';
 import { copyTextToClipboard } from '../utils/clipboard';
 import {
   formatDepth,
@@ -12,6 +13,7 @@ import {
   getRecordTitle,
   getScalePresentation,
 } from '../utils/quakeParser';
+import { ArchiveCalendar } from './ArchiveCalendar';
 
 interface QuakeListProps {
   records: P2PQuakeRecord[];
@@ -28,6 +30,9 @@ interface QuakeListProps {
     other: number;
   };
   isLoading: boolean;
+  archiveDate: string | null;
+  onSelectArchiveDate: (ymd: string) => void;
+  onExitArchiveMode: () => void;
 }
 
 function ScaleSquare({ record }: { record: P2PQuakeRecord }) {
@@ -100,8 +105,12 @@ export function QuakeList({
   onSearchChange,
   counts,
   isLoading,
+  archiveDate,
+  onSelectArchiveDate,
+  onExitArchiveMode,
 }: QuakeListProps) {
   const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const handleRowCopy = async (record: P2PQuakeRecord) => {
     const ok = await copyTextToClipboard(formatQuakeForClipboard(record));
@@ -126,14 +135,61 @@ export function QuakeList({
       className="flex w-full flex-col rounded-lg border border-slate-800 bg-[#0D131F] lg:w-[440px] lg:shrink-0"
     >
       <div className="border-b border-slate-800 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-100">
-            新着履歴（最大30件）
-          </h2>
-          <span className="font-mono text-xs tabular-nums text-slate-400">
-            {records.length}件表示
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">
+              {archiveDate
+                ? `過去データ：${formatJapaneseDateHeading(archiveDate)}`
+                : '新着履歴（最大30件）'}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs tabular-nums text-slate-400">
+              {records.length}件表示
+            </span>
+            <button
+              type="button"
+              data-testid="toggle-calendar-btn"
+              aria-expanded={calendarOpen}
+              onClick={() => setCalendarOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-sky-400 ${
+                calendarOpen || archiveDate
+                  ? 'border-sky-500/60 bg-sky-500/15 text-sky-200'
+                  : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{archiveDate ? '日付変更' : '日付指定'}</span>
+            </button>
+          </div>
         </div>
+
+        {archiveDate && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-sky-500/30 bg-sky-950/30 px-3 py-1.5 text-xs">
+            <span className="text-sky-200">
+              アーカイブ閲覧中（JMA地震・津波）
+            </span>
+            <button
+              type="button"
+              data-testid="exit-archive-btn"
+              onClick={onExitArchiveMode}
+              className="inline-flex items-center gap-1 font-medium text-sky-300 hover:text-white cursor-pointer"
+            >
+              <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              <span>リアルタイムに戻る</span>
+            </button>
+          </div>
+        )}
+
+        {calendarOpen && (
+          <ArchiveCalendar
+            selectedDate={archiveDate}
+            onSelectDate={onSelectArchiveDate}
+            onExitArchive={onExitArchiveMode}
+            onClose={() => setCalendarOpen(false)}
+          />
+        )}
 
         <div className="relative">
           <label htmlFor="quake-search-input" className="sr-only">
@@ -212,21 +268,38 @@ export function QuakeList({
         ) : records.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
             <p className="text-sm font-medium text-slate-300">
-              該当する情報はありません
+              {archiveDate
+                ? `${formatJapaneseDateHeading(archiveDate)}の記録はありません`
+                : '該当する情報はありません'}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              別のカテゴリまたは検索条件をお試しください。
+              {archiveDate
+                ? '別の日付を選択するか、リアルタイム表示に戻してください。'
+                : '別のカテゴリまたは検索条件をお試しください。'}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                onFilterChange('all');
-                onSearchChange('');
-              }}
-              className="mt-4 rounded-md border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
-            >
-              すべて表示に戻す
-            </button>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {archiveDate && (
+                <button
+                  type="button"
+                  onClick={onExitArchiveMode}
+                  className="rounded-md border border-sky-500/40 bg-sky-500/15 px-3.5 py-2 text-xs font-medium text-sky-200 hover:bg-sky-500/25 cursor-pointer"
+                >
+                  リアルタイムに戻る
+                </button>
+              )}
+              {(filter !== 'all' || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onFilterChange('all');
+                    onSearchChange('');
+                  }}
+                  className="rounded-md border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
+                >
+                  すべて表示に戻す
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <ul data-testid="quake-list" className="divide-y divide-slate-800/70">

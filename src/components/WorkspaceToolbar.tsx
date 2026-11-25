@@ -1,5 +1,6 @@
-import { Pause, Play, RefreshCw, Trash2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Calendar, Pause, Play, RefreshCw, RotateCcw, Trash2, Volume2, VolumeX, Zap } from 'lucide-react';
 import type { WsStatus } from '../hooks/useQuakeFeed';
+import { formatDisplayYmd } from '../utils/archiveApi';
 
 interface WorkspaceToolbarProps {
   wsStatus: WsStatus;
@@ -16,6 +17,8 @@ interface WorkspaceToolbarProps {
   onQuickTestEEW: () => void;
   hasTestRecords: boolean;
   onClearTestRecords: () => void;
+  archiveDate: string | null;
+  onExitArchiveMode: () => void;
 }
 
 function formatClockTime(date: Date | null): string {
@@ -39,6 +42,8 @@ export function WorkspaceToolbar({
   onQuickTestEEW,
   hasTestRecords,
   onClearTestRecords,
+  archiveDate,
+  onExitArchiveMode,
 }: WorkspaceToolbarProps) {
   const wsLabel =
     wsStatus === 'connected'
@@ -81,19 +86,38 @@ export function WorkspaceToolbar({
             /
           </span>
 
-          <div className="flex items-center gap-2 text-slate-400 font-mono tabular-nums">
-            <span>最終更新</span>
-            <span className="text-slate-200">{formatClockTime(lastUpdated)}</span>
-          </div>
-
-          {autoUpdateEnabled && (
+          {archiveDate ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 font-mono text-sky-300 tabular-nums">
+                <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                アーカイブ: {formatDisplayYmd(archiveDate)}
+              </span>
+              <button
+                type="button"
+                onClick={onExitArchiveMode}
+                className="inline-flex items-center gap-1 rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20 cursor-pointer"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                <span>最新に戻る</span>
+              </button>
+            </div>
+          ) : (
             <>
-              <span aria-hidden="true" className="text-slate-700 hidden sm:inline">
-                /
-              </span>
-              <span className="text-slate-400 font-mono tabular-nums hidden sm:inline">
-                次回自動取得 <strong className="text-sky-300 font-semibold">{nextRefreshIn}s</strong>
-              </span>
+              <div className="flex items-center gap-2 text-slate-400 font-mono tabular-nums">
+                <span>最終更新</span>
+                <span className="text-slate-200">{formatClockTime(lastUpdated)}</span>
+              </div>
+
+              {autoUpdateEnabled && (
+                <>
+                  <span aria-hidden="true" className="text-slate-700 hidden sm:inline">
+                    /
+                  </span>
+                  <span className="text-slate-400 font-mono tabular-nums hidden sm:inline">
+                    次回自動取得 <strong className="text-sky-300 font-semibold">{nextRefreshIn}s</strong>
+                  </span>
+                </>
+              )}
             </>
           )}
         </div>

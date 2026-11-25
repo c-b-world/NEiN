@@ -1,7 +1,8 @@
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, FileDown, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { P2PQuakeRecord } from '../types/quake';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { exportQuakePdfReport } from '../utils/pdfReport';
 import {
   formatDepth,
   formatMagnitude,
@@ -31,6 +32,7 @@ export function QuakeDetailPanel({
   onSelectRecord,
 }: QuakeDetailPanelProps) {
   const [copied, setCopied] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState<'idle' | 'exporting' | 'done' | 'error'>('idle');
 
   const formattedCopyText = useMemo(() => {
     if (!selectedRecord) return '';
@@ -39,6 +41,7 @@ export function QuakeDetailPanel({
 
   useEffect(() => {
     setCopied(false);
+    setPdfStatus('idle');
   }, [selectedRecord?.id]);
 
   const handleCopy = async () => {
@@ -47,6 +50,23 @@ export function QuakeDetailPanel({
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2400);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!selectedRecord || pdfStatus === 'exporting') return;
+    setPdfStatus('exporting');
+    try {
+      await exportQuakePdfReport(selectedRecord);
+      setPdfStatus('done');
+      window.setTimeout(() => {
+        setPdfStatus((cur) => (cur === 'done' ? 'idle' : cur));
+      }, 2600);
+    } catch {
+      setPdfStatus('error');
+      window.setTimeout(() => {
+        setPdfStatus((cur) => (cur === 'error' ? 'idle' : cur));
+      }, 3000);
     }
   };
 
@@ -140,28 +160,66 @@ export function QuakeDetailPanel({
             </h1>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleCopy()}
-            data-testid="copy-selected-quake-btn"
-            className={`inline-flex min-h-[42px] items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
-              copied
-                ? 'bg-emerald-500 text-slate-950'
-                : 'bg-sky-500 text-slate-950 hover:bg-sky-400'
-            }`}
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4" aria-hidden="true" />
-                <span>コピーしました</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" aria-hidden="true" />
-                <span>地震情報をコピー</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => void handleDownloadPdf()}
+              disabled={pdfStatus === 'exporting'}
+              data-testid="download-pdf-btn"
+              className={`inline-flex min-h-[42px] items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+                pdfStatus === 'done'
+                  ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                  : pdfStatus === 'error'
+                  ? 'border-red-500/60 bg-red-500/15 text-red-200'
+                  : 'border-slate-700 bg-slate-800/90 text-slate-100 hover:bg-slate-700'
+              }`}
+            >
+              {pdfStatus === 'exporting' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>PDF生成中...</span>
+                </>
+              ) : pdfStatus === 'done' ? (
+                <>
+                  <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+                  <span>PDF出力完了</span>
+                </>
+              ) : pdfStatus === 'error' ? (
+                <>
+                  <FileDown className="h-4 w-4 text-red-400" aria-hidden="true" />
+                  <span>PDF生成に失敗</span>
+                </>
+              ) : (
+                <>
+                  <FileDown className="h-4 w-4 text-sky-400" aria-hidden="true" />
+                  <span>PDFダウンロード</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleCopy()}
+              data-testid="copy-selected-quake-btn"
+              className={`inline-flex min-h-[42px] items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+                copied
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'bg-sky-500 text-slate-950 hover:bg-sky-400'
+              }`}
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  <span>コピーしました</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" aria-hidden="true" />
+                  <span>地震情報をコピー</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* 4-column Key Metrics Strip */}

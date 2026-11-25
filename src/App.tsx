@@ -42,6 +42,9 @@ export default function App() {
     triggerTestEEW,
     clearTestRecords,
     hasTestRecords,
+    archiveDate,
+    selectArchiveDate,
+    exitArchiveMode,
     counts,
   } = useQuakeFeed();
 
@@ -81,6 +84,8 @@ export default function App() {
         onQuickTestEEW={() => triggerTestEEW('kanto_alert')}
         hasTestRecords={hasTestRecords}
         onClearTestRecords={clearTestRecords}
+        archiveDate={archiveDate}
+        onExitArchiveMode={exitArchiveMode}
       />
 
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
@@ -116,6 +121,9 @@ export default function App() {
             onSearchChange={setSearchQuery}
             counts={counts}
             isLoading={isLoading}
+            archiveDate={archiveDate}
+            onSelectArchiveDate={(ymd) => void selectArchiveDate(ymd)}
+            onExitArchiveMode={exitArchiveMode}
           />
 
           <div ref={detailContainerRef} className="min-w-0 flex-1">
