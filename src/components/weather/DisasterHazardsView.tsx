@@ -164,12 +164,15 @@ export function DisasterHazardsView({
       const base = loadImg(buildGsiTileUrl('gsi_pale', tile.z, tile.x, tile.y));
       if (base) ctx.drawImage(base, tile.screenX, tile.screenY, 256, 256);
       if (latestRiskEntry) {
-        const riskImg = loadImg(buildJmaKikikuruTileUrl(latestRiskEntry, riskType, tile.z, tile.x, tile.y));
-        if (riskImg) {
-          ctx.save();
-          ctx.globalAlpha = 0.78;
-          ctx.drawImage(riskImg, tile.screenX, tile.screenY, 256, 256);
-          ctx.restore();
+        const riskUrl = buildJmaKikikuruTileUrl(latestRiskEntry, riskType, tile.z, tile.x, tile.y);
+        if (riskUrl) {
+          const riskImg = loadImg(riskUrl);
+          if (riskImg) {
+            ctx.save();
+            ctx.globalAlpha = 0.78;
+            ctx.drawImage(riskImg, tile.screenX, tile.screenY, 256, 256);
+            ctx.restore();
+          }
         }
       }
     }

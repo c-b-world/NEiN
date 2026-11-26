@@ -119,9 +119,53 @@ export function buildGsiTileUrl(
   return `https://cyberjapandata.gsi.go.jp/xyz/${layer}/${z}/${x}/${y}.png`;
 }
 
-export function buildGsiFloodHazardTileUrl(z: number, x: number, y: number): string {
-  // GSI Disaster Portal flood L2 depth raster supports zoom 2..17
+export function tileToLatLonBounds(z: number, x: number, y: number): {
+  north: number;
+  south: number;
+  west: number;
+  east: number;
+} {
+  const n = 2 ** z;
+  const west = (x / n) * 360 - 180;
+  const east = ((x + 1) / n) * 360 - 180;
+  const toLat = (ty: number) => {
+    const merc = Math.PI - (2 * Math.PI * ty) / n;
+    return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(merc) - Math.exp(-merc)));
+  };
+  return {
+    north: toLat(y),
+    south: toLat(y + 1),
+    west,
+    east,
+  };
+}
+
+// Coarse geographic bounding boxes covering Japan's populated islands (Hokkaido, Honshu/Shikoku/Kyushu, Okinawa/Nansei)
+const JAPAN_LAND_BOXES: ReadonlyArray<{ north: number; south: number; west: number; east: number }> = [
+  { south: 41.3, north: 45.6, west: 139.3, east: 145.9 }, // Hokkaido
+  { south: 34.4, north: 41.6, west: 136.5, east: 142.2 }, // Tohoku / Kanto / Chubu
+  { south: 32.7, north: 36.2, west: 129.0, east: 137.0 }, // Kinki / Chugoku / Shikoku / N. Kyushu
+  { south: 30.8, north: 33.2, west: 128.5, east: 132.2 }, // S. Kyushu
+  { south: 24.0, north: 30.9, west: 122.9, east: 131.3 }, // Nansei / Okinawa
+];
+
+export function isTileOverJapanLand(z: number, x: number, y: number): boolean {
+  const b = tileToLatLonBounds(z, x, y);
+  return JAPAN_LAND_BOXES.some(
+    (box) => b.west <= box.east && b.east >= box.west && b.south <= box.north && b.north >= box.south,
+  );
+}
+
+export function buildGsiFloodHazardTileUrl(z: number, x: number, y: number): string | null {
+  // GSI Disaster Portal flood L2 depth raster supports zoom 2..17 and omits non-Japan ocean tiles (404)
+  if (z < 2 || z > 17) return null;
+  if (!isTileOverJapanLand(z, x, y)) return null;
   return `https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/${z}/${x}/${y}.png`;
+}
+
+export function entrySupportsElement(entry: JmaTileTimeEntry, element: string): boolean {
+  if (!entry.elements || entry.elements.length === 0) return true;
+  return entry.elements.includes(element);
 }
 
 export function buildJmaNowcTileUrl(
@@ -130,8 +174,13 @@ export function buildJmaNowcTileUrl(
   z: number,
   x: number,
   y: number,
-): string {
-  return `https://www.jma.go.jp/bosai/jmatile/data/nowc/${entry.basetime}/${entry.member || 'none'}/${entry.validtime}/surf/${element}/${z}/${x}/${y}.png`;
+): string | null {
+  if (!entrySupportsElement(entry, element)) return null;
+  const clampedZ = Math.min(10, Math.max(4, z));
+  const shift = z - clampedZ;
+  const tx = shift > 0 ? Math.floor(x / 2 ** shift) : x;
+  const ty = shift > 0 ? Math.floor(y / 2 ** shift) : y;
+  return `https://www.jma.go.jp/bosai/jmatile/data/nowc/${entry.basetime}/${entry.member || 'none'}/${entry.validtime}/surf/${element}/${clampedZ}/${tx}/${ty}.png`;
 }
 
 export function buildJmaRasrfTileUrl(
@@ -139,8 +188,13 @@ export function buildJmaRasrfTileUrl(
   z: number,
   x: number,
   y: number,
-): string {
-  return `https://www.jma.go.jp/bosai/jmatile/data/rasrf/${entry.basetime}/${entry.member || 'none'}/${entry.validtime}/surf/rasrf/${z}/${x}/${y}.png`;
+): string | null {
+  if (!entrySupportsElement(entry, 'rasrf')) return null;
+  const clampedZ = Math.min(10, Math.max(4, z));
+  const shift = z - clampedZ;
+  const tx = shift > 0 ? Math.floor(x / 2 ** shift) : x;
+  const ty = shift > 0 ? Math.floor(y / 2 ** shift) : y;
+  return `https://www.jma.go.jp/bosai/jmatile/data/rasrf/${entry.basetime}/${entry.member || 'none'}/${entry.validtime}/surf/rasrf/${clampedZ}/${tx}/${ty}.png`;
 }
 
 export function buildJmaKikikuruTileUrl(
@@ -149,8 +203,13 @@ export function buildJmaKikikuruTileUrl(
   z: number,
   x: number,
   y: number,
-): string {
-  return `https://www.jma.go.jp/bosai/jmatile/data/risk/${entry.basetime}/${entry.member || 'immed0'}/${entry.validtime}/surf/${element}/${z}/${x}/${y}.png`;
+): string | null {
+  if (!entrySupportsElement(entry, element)) return null;
+  const clampedZ = Math.min(10, Math.max(4, z));
+  const shift = z - clampedZ;
+  const tx = shift > 0 ? Math.floor(x / 2 ** shift) : x;
+  const ty = shift > 0 ? Math.floor(y / 2 ** shift) : y;
+  return `https://www.jma.go.jp/bosai/jmatile/data/risk/${entry.basetime}/${entry.member || 'none'}/${entry.validtime}/surf/${element}/${clampedZ}/${tx}/${ty}.png`;
 }
 
 export function buildHimawariTileUrl(
@@ -168,6 +227,14 @@ export function buildHimawariTileUrl(
   return `https://www.jma.go.jp/bosai/himawari/data/satimg/${entry.basetime}/fd/${entry.validtime}/${band}/${prod}/${satZoom}/${sx}/${sy}.jpg`;
 }
 
+export function filterEntriesByElement(
+  entries: JmaTileTimeEntry[],
+  element: string,
+): JmaTileTimeEntry[] {
+  const matched = entries.filter((e) => entrySupportsElement(e, element));
+  return matched.length > 0 ? matched : entries;
+}
+
 function normalizeTimeList(raw: unknown, defaultMember = 'none'): JmaTileTimeEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -175,7 +242,7 @@ function normalizeTimeList(raw: unknown, defaultMember = 'none'): JmaTileTimeEnt
       const r = item as Record<string, unknown>;
       const basetime = typeof r.basetime === 'string' ? r.basetime : '';
       const validtime = typeof r.validtime === 'string' ? r.validtime : '';
-      const member = typeof r.member === 'string' ? r.member : defaultMember;
+      const member = typeof r.member === 'string' && r.member ? r.member : defaultMember;
       const elements = Array.isArray(r.elements)
         ? (r.elements as unknown[]).map((e) => String(e))
         : [];
@@ -254,11 +321,30 @@ export async function fetchAllRadarTimelines(forceRefresh = false): Promise<Rada
     ...normalizeTimeList(n1.status === 'fulfilled' ? n1.value : []),
     ...normalizeTimeList(n2.status === 'fulfilled' ? n2.value : []),
   ]) {
-    hrpnsMerged.set(item.validtime, item);
+    if (entrySupportsElement(item, 'hrpns')) {
+      hrpnsMerged.set(item.validtime, item);
+    }
   }
   const hrpns = Array.from(hrpnsMerged.values()).sort((a, b) =>
     a.validtime.localeCompare(b.validtime),
   );
+
+  const rasrfNormalized = filterEntriesByElement(
+    normalizeTimeList(rasrf.status === 'fulfilled' ? rasrf.value : []),
+    'rasrf',
+  );
+
+  // targetTimes_N3.json mixes 5-min liden-only frames with 10-min thns/trns frames;
+  // keep frames that actually include thns/trns so lightning & tornado tiles never 404.
+  const n3Normalized = normalizeTimeList(n3.status === 'fulfilled' ? n3.value : []);
+  const lightningTornado = n3Normalized.filter(
+    (entry) => entrySupportsElement(entry, 'thns') && entrySupportsElement(entry, 'trns'),
+  );
+
+  const riskNormalized = normalizeTimeList(
+    risk.status === 'fulfilled' ? risk.value : [],
+    'none',
+  ).filter((entry) => entrySupportsElement(entry, 'land'));
 
   const wmapObj = (wmap.status === 'fulfilled' && wmap.value ? wmap.value : {}) as Record<
     string,
@@ -270,9 +356,9 @@ export async function fetchAllRadarTimelines(forceRefresh = false): Promise<Rada
 
   const bundle: RadarTimelinesBundle = {
     hrpns,
-    rasrf: normalizeTimeList(rasrf.status === 'fulfilled' ? rasrf.value : []),
-    lightningTornado: normalizeTimeList(n3.status === 'fulfilled' ? n3.value : []),
-    kikikuru: normalizeTimeList(risk.status === 'fulfilled' ? risk.value : [], 'immed0'),
+    rasrf: rasrfNormalized,
+    lightningTornado: lightningTornado.length > 0 ? lightningTornado : n3Normalized,
+    kikikuru: riskNormalized,
     himawari: normalizeTimeList(sat.status === 'fulfilled' ? sat.value : []).slice(-24),
     weatherMaps: {
       nearNow: asArr(near.now),
@@ -285,7 +371,8 @@ export async function fetchAllRadarTimelines(forceRefresh = false): Promise<Rada
     fetchedAt: now,
   };
 
-  tileCache.set('all', { data: bundle, expiresAt: Date.now() + 3 * 60 * 1000 });
+  // Use a 60s cache TTL so JMA's 10-min Kikikuru immed0->immed1 member rotation stays fresh.
+  tileCache.set('all', { data: bundle, expiresAt: Date.now() + 60 * 1000 });
   const liveHrpns = hrpns[findLiveObservationIndex(hrpns)] ?? hrpns[hrpns.length - 1];
   setSourceStatus('jma_radar_kikikuru', 'normal', {
     lastFetchedAt: now,

@@ -6,6 +6,7 @@
 import { AlertCircle, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BackgroundMotionLayer } from './components/BackgroundMotionLayer';
+import { BgmPlayerEngine } from './components/BgmPlayerEngine';
 import { EEWWarningModal } from './components/EEWWarningModal';
 import {
   Header,
@@ -54,6 +55,12 @@ import {
   resolveEffectiveBackgroundMotion,
   saveThemeSettings,
 } from './utils/themeSettings';
+import {
+  type BgmSettings,
+  clampBgmVolume,
+  loadBgmSettings,
+  saveBgmSettings,
+} from './utils/bgmManager';
 
 export default function App() {
   const {
@@ -112,6 +119,7 @@ export default function App() {
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [showStartupSplash, setShowStartupSplash] = useState(true);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
+  const [bgmSettings, setBgmSettings] = useState<BgmSettings>(() => loadBgmSettings());
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
   const mobileNavRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +133,10 @@ export default function App() {
     applyThemeToDocument(themeSettings);
     saveThemeSettings(themeSettings);
   }, [themeSettings]);
+
+  useEffect(() => {
+    saveBgmSettings(bgmSettings);
+  }, [bgmSettings]);
 
   useEffect(() => {
     applyLanguageToDocument(lang);
@@ -603,6 +615,8 @@ export default function App() {
             onChangeNotificationPrefs={hub.setNotificationPrefs}
             notificationHistory={hub.notificationHistory}
             onClearNotificationHistory={hub.clearNotificationHistory}
+            bgmSettings={bgmSettings}
+            onChangeBgmSettings={setBgmSettings}
           />
         ) : (
           <>
@@ -692,6 +706,34 @@ export default function App() {
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
         onDispatch={triggerTestEEW}
+      />
+
+      <BgmPlayerEngine
+        lang={lang}
+        settings={bgmSettings}
+        isEmergencyDucking={Boolean(activeEEW)}
+        onToggleEnabled={() =>
+          setBgmSettings((prev) => ({
+            ...prev,
+            enabled: !prev.enabled,
+          }))
+        }
+        onToggleMute={() =>
+          setBgmSettings((prev) => ({
+            ...prev,
+            muted: !prev.muted,
+          }))
+        }
+        onChangeVolume={(vol) =>
+          setBgmSettings((prev) => {
+            const clamped = clampBgmVolume(vol);
+            return {
+              ...prev,
+              volume: clamped,
+              muted: clamped === 0,
+            };
+          })
+        }
       />
 
       {showStartupSplash && !activeEEW && (

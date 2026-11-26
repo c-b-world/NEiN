@@ -38,7 +38,6 @@ export function RadarSatelliteView({
   const [satBand, setSatBand] = useState<'B13' | 'REP'>('B13');
   const [wmapArea, setWmapArea] = useState<'near' | 'asia'>('near');
   const [wmapSpan, setWmapSpan] = useState<'now' | 'ft24' | 'ft48'>('now');
-  const [frameIdx, setFrameIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speedMs, setSpeedMs] = useState(800);
   const [zoom, setZoom] = useState(5);
@@ -49,6 +48,11 @@ export function RadarSatelliteView({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imgCacheRef = useRef<Map<string, HTMLImageElement | 'loading' | 'error'>>(new Map());
 
+  const [frameState, setFrameState] = useState<{ mode: RadarMode; idx: number }>({
+    mode: 'hrpns',
+    idx: 0,
+  });
+
   const activeList: JmaTileTimeEntry[] = useMemo(() => {
     if (!timelines) return [];
     if (mode === 'hrpns') return timelines.hrpns;
@@ -58,22 +62,38 @@ export function RadarSatelliteView({
     return [];
   }, [mode, timelines]);
 
+  const defaultLiveIdx = useMemo(() => findLiveObservationIndex(activeList), [activeList]);
+  const frameIdx =
+    frameState.mode === mode && frameState.idx >= 0 && frameState.idx < activeList.length
+      ? frameState.idx
+      : defaultLiveIdx;
+
+  const setFrameIdx = (next: number | ((prev: number) => number)) => {
+    setFrameState((prev) => {
+      const baseIdx =
+        prev.mode === mode && prev.idx >= 0 && prev.idx < activeList.length
+          ? prev.idx
+          : defaultLiveIdx;
+      const resolved = typeof next === 'function' ? next(baseIdx) : next;
+      return { mode, idx: resolved };
+    });
+  };
+
   useEffect(() => {
-    if (activeList.length > 0) {
-      setFrameIdx(findLiveObservationIndex(activeList));
-    } else {
-      setFrameIdx(0);
-    }
+    setFrameState({ mode, idx: defaultLiveIdx });
     setIsPlaying(false);
-  }, [mode, activeList]);
+  }, [mode, defaultLiveIdx]);
 
   useEffect(() => {
     if (!isPlaying || activeList.length <= 1) return;
     const t = window.setInterval(() => {
-      setFrameIdx((prev) => (prev + 1) % activeList.length);
+      setFrameState((prev) => {
+        const cur = prev.mode === mode ? prev.idx : defaultLiveIdx;
+        return { mode, idx: (cur + 1) % activeList.length };
+      });
     }, speedMs);
     return () => window.clearInterval(t);
-  }, [isPlaying, activeList.length, speedMs]);
+  }, [isPlaying, activeList.length, speedMs, mode, defaultLiveIdx]);
 
   useEffect(() => {
     const onFs = () => {
@@ -146,12 +166,14 @@ export function RadarSatelliteView({
             ? buildJmaNowcTileUrl(currentEntry, 'trns', tile.z, tile.x, tile.y)
             : buildHimawariTileUrl(currentEntry, satBand, tile.z, tile.x, tile.y);
 
-        const ovImg = loadImg(overlayUrl);
-        if (ovImg) {
-          ctx.save();
-          ctx.globalAlpha = mode === 'satellite' ? 0.72 : 0.8;
-          ctx.drawImage(ovImg, tile.screenX, tile.screenY, 256, 256);
-          ctx.restore();
+        if (overlayUrl) {
+          const ovImg = loadImg(overlayUrl);
+          if (ovImg) {
+            ctx.save();
+            ctx.globalAlpha = mode === 'satellite' ? 0.72 : 0.8;
+            ctx.drawImage(ovImg, tile.screenX, tile.screenY, 256, 256);
+            ctx.restore();
+          }
         }
       }
     }

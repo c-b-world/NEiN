@@ -48,6 +48,8 @@ import {
   resolveEffectiveBackgroundMotion,
 } from '../utils/themeSettings';
 import { formatJstTimestamp } from '../utils/weatherParser';
+import type { BgmSettings } from '../utils/bgmManager';
+import { BgmSettingsSection } from './BgmSettingsSection';
 
 const BG_MOTION_COPY: Record<
   AppLanguage,
@@ -150,6 +152,8 @@ interface SystemSettingsPanelProps {
   onChangeNotificationPrefs: (next: NotificationPreferences) => void;
   notificationHistory: NotificationHistoryEntry[];
   onClearNotificationHistory: () => void;
+  bgmSettings: BgmSettings;
+  onChangeBgmSettings: (updater: (prev: BgmSettings) => BgmSettings) => void;
 }
 
 export function SystemSettingsPanel({
@@ -181,6 +185,8 @@ export function SystemSettingsPanel({
   onChangeNotificationPrefs,
   notificationHistory,
   onClearNotificationHistory,
+  bgmSettings,
+  onChangeBgmSettings,
 }: SystemSettingsPanelProps) {
   const m = getMessages(lang);
   const ext = getExtendedMessages(lang);
@@ -638,6 +644,13 @@ export function SystemSettingsPanel({
           })}
         </div>
       </div>
+
+      {/* 3.7. BGM Settings (ON/OFF, Stylish Dropdown, .mp3/.mp4 Upload, YouTube/Spotify Embed, Loop, Volume) */}
+      <BgmSettingsSection
+        lang={lang}
+        bgmSettings={bgmSettings}
+        onChangeBgmSettings={onChangeBgmSettings}
+      />
 
       {/* 4. Operational Settings (Notifications, Sound, Polling) */}
       <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
