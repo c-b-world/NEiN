@@ -66,15 +66,17 @@ import {
   type CurrentLocationContext,
   type EewSpeechSettings,
   analyzeLocalEewImpact,
-  buildEewSpeechScript,
+  buildEewSpeechSegments,
   getSpeechErrorMessage,
   isSpeechSynthesisSupported,
   loadEewSpeechSettings,
   resolveCurrentLocationContext,
+  resolveEffectiveSpeechLanguage,
   saveEewSpeechSettings,
-  speakDisasterAnnouncement,
+  speakDisasterSegments,
   stopDisasterAnnouncement,
 } from './utils/eewSpeech';
+import { localizeJapanesePlaceName } from './utils/eewSpeechLocale';
 import {
   createRegionFromOffice,
   findNearestWeatherOffice,
@@ -154,6 +156,7 @@ export default function App() {
 
   const hub = useDisasterHub(lang, records);
   const speechSupported = isSpeechSynthesisSupported();
+  const effectiveSpeechLang = resolveEffectiveSpeechLanguage(eewSpeechSettings.speechLanguage, lang);
   const currentLocation = resolveCurrentLocationContext(detectedLocation, hub.registeredRegions);
   const activeEewImpact = activeEEW
     ? analyzeLocalEewImpact(activeEEW, currentLocation, {
@@ -193,6 +196,7 @@ export default function App() {
     regionSnapshots: hub.regionSnapshots,
     jmaTsunamis: hub.jmaTsunamis,
     lang,
+    effectiveSpeechLang,
     soundEnabled,
   });
   speechContextRef.current = {
@@ -201,6 +205,7 @@ export default function App() {
     regionSnapshots: hub.regionSnapshots,
     jmaTsunamis: hub.jmaTsunamis,
     lang,
+    effectiveSpeechLang,
     soundEnabled,
   };
 
@@ -221,12 +226,13 @@ export default function App() {
       regionSnapshots: ctx.regionSnapshots,
       jmaTsunamis: ctx.jmaTsunamis,
     });
-    const script = buildEewSpeechScript(
+    const segments = buildEewSpeechSegments(
       activeEEW,
       impact,
-      ctx.lang,
+      ctx.effectiveSpeechLang,
       ctx.eewSpeechSettings.includePreparednessAdvice,
     );
+    const script = segments.map((s) => s.text).join(' ');
     setLastSpokenScript(script);
     setSpeechError(null);
 
@@ -237,10 +243,12 @@ export default function App() {
     // Slight delay when alert chime is enabled so voice readout starts cleanly right after the chime
     const delayMs = ctx.soundEnabled ? 450 : 80;
     const timer = window.setTimeout(() => {
-      speakDisasterAnnouncement(script, {
-        lang: ctx.lang,
+      speakDisasterSegments(segments, {
+        lang: ctx.effectiveSpeechLang,
         rate: ctx.eewSpeechSettings.rate,
+        pitch: ctx.eewSpeechSettings.pitch,
         volume: ctx.eewSpeechSettings.volume,
+        preferredVoiceName: ctx.eewSpeechSettings.preferredVoiceName,
         onStart: () => {
           setSpeechError(null);
           setIsEewSpeaking(true);
@@ -320,20 +328,24 @@ export default function App() {
     dismissEEW();
   };
 
-  const handleReplayActiveEewSpeech = () => {
+  const handleReplayActiveEewSpeech = (overrideLang?: AppLanguage) => {
     if (!activeEEW || !activeEewImpact) return;
-    const script = buildEewSpeechScript(
+    const targetLang = overrideLang ?? effectiveSpeechLang;
+    const segments = buildEewSpeechSegments(
       activeEEW,
       activeEewImpact,
-      lang,
+      targetLang,
       eewSpeechSettings.includePreparednessAdvice,
     );
+    const script = segments.map((s) => s.text).join(' ');
     setLastSpokenScript(script);
     setSpeechError(null);
-    speakDisasterAnnouncement(script, {
-      lang,
+    speakDisasterSegments(segments, {
+      lang: targetLang,
       rate: eewSpeechSettings.rate,
+      pitch: eewSpeechSettings.pitch,
       volume: eewSpeechSettings.volume,
+      preferredVoiceName: overrideLang ? '' : eewSpeechSettings.preferredVoiceName,
       onStart: () => {
         setSpeechError(null);
         setIsEewSpeaking(true);
@@ -345,6 +357,15 @@ export default function App() {
         }
       },
     });
+  };
+
+  const handleSwitchActiveSpeechLang = (nextLang: AppLanguage) => {
+    setEewSpeechSettings((prev) => ({
+      ...prev,
+      speechLanguage: nextLang,
+      preferredVoiceName: '',
+    }));
+    handleReplayActiveEewSpeech(nextLang);
   };
 
   const handleTestEewSpeech = () => {
@@ -388,18 +409,21 @@ export default function App() {
       regionSnapshots: hub.regionSnapshots,
       jmaTsunamis: hub.jmaTsunamis,
     });
-    const script = buildEewSpeechScript(
+    const segments = buildEewSpeechSegments(
       sampleAlert,
       impact,
-      lang,
+      effectiveSpeechLang,
       eewSpeechSettings.includePreparednessAdvice,
     );
+    const script = segments.map((s) => s.text).join(' ');
     setLastSpokenScript(script);
     setSpeechError(null);
-    speakDisasterAnnouncement(script, {
-      lang,
+    speakDisasterSegments(segments, {
+      lang: effectiveSpeechLang,
       rate: eewSpeechSettings.rate,
+      pitch: eewSpeechSettings.pitch,
       volume: eewSpeechSettings.volume,
+      preferredVoiceName: eewSpeechSettings.preferredVoiceName,
       onStart: () => {
         setSpeechError(null);
         setIsEewSpeaking(true);
@@ -938,6 +962,7 @@ export default function App() {
 
       <EEWWarningModal
         lang={lang}
+        speechLang={effectiveSpeechLang}
         alert={activeEEW}
         onDismiss={handleDismissEEW}
         localImpact={activeEewImpact}
@@ -946,8 +971,9 @@ export default function App() {
         bgmDucked={bgmSettings.enabled && (Boolean(activeEEW) || (isEewSpeaking && eewSpeechSettings.duckBgmDuringSpeech))}
         spokenScript={lastSpokenScript}
         speechError={speechError}
-        onReplaySpeech={handleReplayActiveEewSpeech}
+        onReplaySpeech={() => handleReplayActiveEewSpeech()}
         onStopSpeech={handleStopEewSpeech}
+        onSwitchSpeechLang={handleSwitchActiveSpeechLang}
       />
 
       <TestDispatchModal
@@ -964,7 +990,7 @@ export default function App() {
         isSpeechReading={isEewSpeaking && eewSpeechSettings.duckBgmDuringSpeech}
         speechStatusText={
           isEewSpeaking
-            ? `${currentLocation.label} — ${lastSpokenScript ?? ''}`
+            ? `${localizeJapanesePlaceName(currentLocation.prefectureName, effectiveSpeechLang)} — ${lastSpokenScript ?? ''}`
             : null
         }
         onStopSpeech={handleStopEewSpeech}

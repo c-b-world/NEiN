@@ -13,7 +13,8 @@ import { useEffect, useState } from 'react';
 import type { EEW556, EEWDetection554 } from '../types/quake';
 import { copyTextToClipboard } from '../utils/clipboard';
 import type { LocalEewImpactAnalysis } from '../utils/eewSpeech';
-import { type AppLanguage, getMessages } from '../utils/i18n';
+import { localizeJapanesePlaceName } from '../utils/eewSpeechLocale';
+import { type AppLanguage, LANGUAGE_OPTIONS, getMessages } from '../utils/i18n';
 import {
   formatDepth,
   formatMagnitude,
@@ -26,6 +27,7 @@ import {
 
 interface EEWWarningModalProps {
   lang: AppLanguage;
+  speechLang?: AppLanguage;
   alert: EEW556 | EEWDetection554 | null;
   onDismiss: () => void;
   localImpact?: LocalEewImpactAnalysis | null;
@@ -36,6 +38,7 @@ interface EEWWarningModalProps {
   speechError?: string | null;
   onReplaySpeech?: () => void;
   onStopSpeech?: () => void;
+  onSwitchSpeechLang?: (nextLang: AppLanguage) => void;
 }
 
 const MODAL_SPEECH_COPY: Record<
@@ -110,6 +113,7 @@ const MODAL_SPEECH_COPY: Record<
 
 export function EEWWarningModal({
   lang,
+  speechLang,
   alert,
   onDismiss,
   localImpact = null,
@@ -120,8 +124,10 @@ export function EEWWarningModal({
   speechError = null,
   onReplaySpeech,
   onStopSpeech,
+  onSwitchSpeechLang,
 }: EEWWarningModalProps) {
   const m = getMessages(lang);
+  const activeSpeechLang = speechLang ?? lang;
   const speechCopy = MODAL_SPEECH_COPY[lang] ?? MODAL_SPEECH_COPY.ja;
   const [copied, setCopied] = useState(false);
 
@@ -320,40 +326,75 @@ export function EEWWarningModal({
                   )}
                 </div>
 
-                {speechSupported ? (
-                  isSpeaking ? (
-                    <button
-                      type="button"
-                      data-testid="eew-modal-stop-speech-btn"
-                      onClick={onStopSpeech}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-red-400/60 bg-red-600/90 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-red-500 cursor-pointer"
+                <div className="flex flex-wrap items-center gap-2">
+                  {onSwitchSpeechLang && (
+                    <div
+                      role="group"
+                      aria-label={speechCopy.sectionTitle}
+                      className="inline-flex items-center overflow-hidden rounded-md border border-slate-700 bg-slate-950/80"
                     >
-                      <Square className="h-3 w-3 fill-current" aria-hidden="true" />
-                      <span>{speechCopy.stopBtn}</span>
-                    </button>
+                      {LANGUAGE_OPTIONS.map((opt) => {
+                        const isSelected = activeSpeechLang === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            data-testid={`eew-modal-speech-lang-${opt.id}`}
+                            title={opt.nativeName}
+                            aria-pressed={isSelected}
+                            onClick={() => onSwitchSpeechLang(opt.id)}
+                            className={`px-2 py-1 font-mono text-[10px] font-bold transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-sky-500/30 text-sky-100'
+                                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                            }`}
+                          >
+                            {opt.codeLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {speechSupported ? (
+                    isSpeaking ? (
+                      <button
+                        type="button"
+                        data-testid="eew-modal-stop-speech-btn"
+                        onClick={onStopSpeech}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-red-400/60 bg-red-600/90 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-red-500 cursor-pointer"
+                      >
+                        <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                        <span>{speechCopy.stopBtn}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid="eew-modal-replay-speech-btn"
+                        onClick={onReplaySpeech}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-sky-400/50 bg-sky-500/20 px-2.5 py-1 text-[11px] font-bold text-sky-100 transition-colors hover:bg-sky-500/35 cursor-pointer"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{speechCopy.replayBtn}</span>
+                      </button>
+                    )
                   ) : (
-                    <button
-                      type="button"
-                      data-testid="eew-modal-replay-speech-btn"
-                      onClick={onReplaySpeech}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-sky-400/50 bg-sky-500/20 px-2.5 py-1 text-[11px] font-bold text-sky-100 transition-colors hover:bg-sky-500/35 cursor-pointer"
-                    >
-                      <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>{speechCopy.replayBtn}</span>
-                    </button>
-                  )
-                ) : (
-                  <span className="text-[10px] text-slate-400">
-                    {speechCopy.unsupportedHint}
-                  </span>
-                )}
+                    <span className="text-[10px] text-slate-400">
+                      {speechCopy.unsupportedHint}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Current Location Summary Metrics */}
               <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
                 <span className="inline-flex items-center gap-1 font-semibold text-white">
                   <MapPin className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-                  <span data-testid="eew-modal-location-label">{localImpact.location.label}</span>
+                  <span data-testid="eew-modal-location-label">
+                    {activeSpeechLang === 'ja'
+                      ? localImpact.location.label
+                      : localizeJapanesePlaceName(localImpact.location.prefectureName, activeSpeechLang)}
+                  </span>
                 </span>
 
                 {!isCancelled && alert.code === 556 && (

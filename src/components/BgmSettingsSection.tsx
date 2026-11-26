@@ -3,10 +3,12 @@ import {
   ChevronDown,
   FileAudio,
   Film,
+  Languages,
   Link2,
   LocateFixed,
   MapPin,
   Megaphone,
+  Mic,
   Music2,
   Plus,
   Radio,
@@ -33,11 +35,18 @@ import {
 } from '../utils/bgmManager';
 import {
   type CurrentLocationContext,
+  type EewSpeechLanguageSetting,
   type EewSpeechSettings,
+  clampSpeechPitch,
   clampSpeechRate,
+  getAvailableSpeechVoices,
   isSpeechSynthesisSupported,
+  resolveEffectiveSpeechLanguage,
+  selectBestSpeechVoice,
+  subscribeSpeechVoicesChanged,
 } from '../utils/eewSpeech';
-import type { AppLanguage } from '../utils/i18n';
+import { localizeJapanesePlaceName } from '../utils/eewSpeechLocale';
+import { type AppLanguage, LANGUAGE_OPTIONS } from '../utils/i18n';
 
 interface BgmSettingsSectionProps {
   lang: AppLanguage;
@@ -246,11 +255,17 @@ const EEW_SPEECH_UI_COPY: Record<
     sourceFallback: string;
     detectGpsBtn: string;
     gpsDenied: string;
+    speechLangLabel: string;
+    speechLangAuto: string;
+    voiceModelLabel: string;
+    voiceAutoOption: string;
+    voiceFallbackNote: string;
     duckLabel: string;
     duckDesc: string;
     adviceLabel: string;
     adviceDesc: string;
     rateLabel: string;
+    pitchLabel: string;
     testBtn: string;
     stopBtn: string;
     speakingBadge: string;
@@ -261,9 +276,9 @@ const EEW_SPEECH_UI_COPY: Record<
   }
 > = {
   ja: {
-    title: '緊急地震速報・現在地防災アナウンス（Web Speech API × BGM連携）',
+    title: '緊急地震速報・現在地防災アナウンス（多言語・流暢音声 × BGM連携）',
     subtitle:
-      '緊急地震速報の発表時に、現在地の予測震度・震源距離・津波や避難行動を音声合成で自動読み上げします。再生中のBGMは自動で一時消音されます。',
+      '緊急地震速報の発表時に、日本語・English・简体中文・한국語の全4言語で自然な間の取り方と抑揚をつけた防災アナウンスを自動読み上げします。再生中のBGMは自動で一時消音されます。',
     enabledOn: '音声読み上げ ON',
     enabledOff: '音声読み上げ OFF',
     locationLabel: '読み上げ対象の現在地',
@@ -272,23 +287,29 @@ const EEW_SPEECH_UI_COPY: Record<
     sourceFallback: '既定地域',
     detectGpsBtn: '現在地を取得',
     gpsDenied: '位置情報の取得が許可されなかったか、ブラウザで利用できませんでした。',
+    speechLangLabel: '読み上げ言語（導入済み全4言語対応）',
+    speechLangAuto: 'アプリ連動',
+    voiceModelLabel: '音声モデル（高品質・Neural優先）',
+    voiceAutoOption: '自動（最高品質・流暢）',
+    voiceFallbackNote: 'この言語の専用音声が端末に未導入のため、標準音声または画面表示で案内します。',
     duckLabel: '読み上げ中にBGMを自動一時消音',
     duckDesc: 'BgmPlayerEngineと連携し、音声読み上げ中は内蔵BGM・MP3/MP4・YouTubeの音量を自動で下げます。',
     adviceLabel: '避難行動・津波/気象警報アドバイスを含める',
     adviceDesc: '現在地が警報対象の場合の安全確保や、発表中の気象警報・津波リスクもあわせて読み上げます。',
     rateLabel: '読み上げ速度',
+    pitchLabel: '声の高さ（抑揚ベース）',
     testBtn: 'テスト読み上げ（BGM連携確認）',
     stopBtn: '読み上げ停止',
     speakingBadge: '音声読み上げ中',
     bgmDuckingBadge: 'BGM自動消音中',
     previewLabel: '最新の読み上げ内容',
-    previewPlaceholder: '「テスト読み上げ」を押すと、現在地向けの防災アナウンスを音声合成で確認できます。',
+    previewPlaceholder: '「テスト読み上げ」を押すと、選択言語で現在地向けの流暢な防災アナウンスを確認できます。',
     unsupportedNotice: 'お使いのブラウザは Web Speech API（speechSynthesis）に対応していないため音声出力できません。',
   },
   en: {
-    title: 'EEW Local Disaster Voice Readout (Web Speech API × BGM Link)',
+    title: 'EEW Multilingual Local Voice Broadcast (Fluent TTS × BGM Link)',
     subtitle:
-      'Automatically speaks local predicted intensity, epicenter distance, tsunami cautions, and safety guidance when an Earthquake Early Warning arrives while auto-muting BGM.',
+      'Delivers segmented, natural-cadence disaster voice announcements in all 4 app languages (Japanese, English, Simplified Chinese, Korean) with localized place names while auto-muting BGM.',
     enabledOn: 'Voice Alert ON',
     enabledOff: 'Voice Alert OFF',
     locationLabel: 'Target Current Location',
@@ -297,23 +318,29 @@ const EEW_SPEECH_UI_COPY: Record<
     sourceFallback: 'Default Region',
     detectGpsBtn: 'Use Current Location',
     gpsDenied: 'Location access was denied or is unavailable in this browser.',
+    speechLangLabel: 'Voice Language (All 4 App Languages)',
+    speechLangAuto: 'App Lang',
+    voiceModelLabel: 'Voice Model (Neural / Natural Priority)',
+    voiceAutoOption: 'Auto (Most Fluent)',
+    voiceFallbackNote: 'No dedicated voice for this language was detected on this device; falling back to default speech or on-screen script.',
     duckLabel: 'Auto-mute BGM during voice alerts',
     duckDesc: 'Links with BgmPlayerEngine to mute built-in ambient, MP3/MP4, and YouTube playback while speaking.',
     adviceLabel: 'Include safety & tsunami/weather guidance',
     adviceDesc: 'Adds protective actions, coastal tsunami evacuation prompts, and active local weather warnings.',
     rateLabel: 'Speech Rate',
+    pitchLabel: 'Voice Pitch',
     testBtn: 'Test Voice Readout (Check BGM Link)',
     stopBtn: 'Stop Readout',
     speakingBadge: 'Speaking Now',
     bgmDuckingBadge: 'BGM Auto-Muted',
     previewLabel: 'Latest Broadcast Script',
-    previewPlaceholder: 'Click "Test Voice Readout" to preview local disaster speech and automatic BGM muting.',
+    previewPlaceholder: 'Click "Test Voice Readout" to hear the fluent segmented local disaster broadcast in the selected language.',
     unsupportedNotice: 'Web Speech API (speechSynthesis) is not supported in this browser.',
   },
   zh: {
-    title: '紧急地震速报・当前位置防灾语音播报（Web Speech API × BGM联动）',
+    title: '紧急地震速报・多语言流畅防灾语音播报（Web Speech API × BGM联动）',
     subtitle:
-      '发布紧急地震速报时，使用语音合成自动播报当前位置的预测震度、震中距离与避难提示，并自动临时静音正在播放的 BGM。',
+      '发布紧急地震速报时，支持日语、英语、简体中文、韩语全部4种语言的分段自然语调播报，自动将日本地名转换为自然中文读法并临时静音 BGM。',
     enabledOn: '语音播报开启',
     enabledOff: '语音播报关闭',
     locationLabel: '播报目标当前位置',
@@ -322,23 +349,29 @@ const EEW_SPEECH_UI_COPY: Record<
     sourceFallback: '默认地区',
     detectGpsBtn: '获取当前位置',
     gpsDenied: '未能获取定位权限或当前浏览器不支持定位。',
+    speechLangLabel: '播报语言（支持全部4种应用语言）',
+    speechLangAuto: '跟随应用',
+    voiceModelLabel: '语音模型（优先选择自然神经语音）',
+    voiceAutoOption: '自动（最流畅音色）',
+    voiceFallbackNote: '当前设备未检测到该语言的专用音色，将使用默认语音或文本提示。',
     duckLabel: '播报期间自动临时静音 BGM',
     duckDesc: '与 BgmPlayerEngine 联动，播报语音时自动静音内置环境音、MP3/MP4 与 YouTube。',
     adviceLabel: '包含避难行动与海啸/气象警报提示',
     adviceDesc: '播报当前位置的防护建议、海啸撤离提示及生效中的本地气象警报。',
     rateLabel: '播报语速',
+    pitchLabel: '音调高低',
     testBtn: '测试语音播报（验证BGM联动）',
     stopBtn: '停止播报',
     speakingBadge: '正在语音播报',
     bgmDuckingBadge: 'BGM自动静音中',
     previewLabel: '最新播报内容',
-    previewPlaceholder: '点击「测试语音播报」即可试听当前位置的防灾语音并确认 BGM 自动静音联动。',
+    previewPlaceholder: '点击「测试语音播报」即可试听所选语言的流畅防灾语音并确认 BGM 自动静音联动。',
     unsupportedNotice: '当前浏览器不支持 Web Speech API（speechSynthesis）。',
   },
   ko: {
-    title: '긴급지진속보・현재 위치 재난 음성 안내 (Web Speech API × BGM 연동)',
+    title: '긴급지진속보・다국어 자연스러운 재난 음성 안내 (Web Speech API × BGM 연동)',
     subtitle:
-      '긴급지진속보 발표 시 현재 위치의 예상 진도・진원 거리・대피 요령을 음성 합성으로 안내하며 재생 중인 BGM을 자동으로 잠시 음소거합니다.',
+      '긴급지진속보 발표 시 일본어・영어・중국어・한국어 4개 언어 모두 자연스러운 호흡과 억양으로 현재 위치 재난 정보를 안내하며 BGM을 자동 음소거합니다.',
     enabledOn: '음성 안내 ON',
     enabledOff: '음성 안내 OFF',
     locationLabel: '안내 대상 현재 위치',
@@ -347,17 +380,23 @@ const EEW_SPEECH_UI_COPY: Record<
     sourceFallback: '기본 지역',
     detectGpsBtn: '현재 위치 가져오기',
     gpsDenied: '위치 권한이 거부되었거나 브라우저에서 위치 정보를 사용할 수 없습니다.',
+    speechLangLabel: '음성 안내 언어 (앱 지원 4개 언어 전체)',
+    speechLangAuto: '앱 연동',
+    voiceModelLabel: '음성 모델 (고품질・Neural 우선)',
+    voiceAutoOption: '자동 (가장 자연스러운 음성)',
+    voiceFallbackNote: '이 기기에 해당 언어 전용 음성이 없어 기본 음성 또는 화면 텍스트로 안내합니다.',
     duckLabel: '음성 안내 중 BGM 자동 음소거',
     duckDesc: 'BgmPlayerEngine과 연동되어 음성 안내 중 내장 BGM・MP3/MP4・YouTube 볼륨을 자동 음소거합니다.',
     adviceLabel: '대피 요령 및 쓰나미/기상 경보 안내 포함',
     adviceDesc: '안전 행동 요령, 해안 쓰나미 대피 안내 및 현재 위치 기상 경보를 함께 읽어줍니다.',
     rateLabel: '음성 속도',
+    pitchLabel: '목소리 톤 (피치)',
     testBtn: '테스트 음성 안내 (BGM 연동 확인)',
     stopBtn: '안내 중지',
     speakingBadge: '음성 안내 중',
     bgmDuckingBadge: 'BGM 자동 음소거 중',
     previewLabel: '최근 안내 스크립트',
-    previewPlaceholder: '「테스트 음성 안내」를 눌러 현재 위치 재난 음성과 BGM 자동 음소거 연동을 확인하세요.',
+    previewPlaceholder: '「테스트 음성 안내」를 눌러 선택한 언어의 자연스러운 재난 음성 안내와 BGM 연동을 확인하세요.',
     unsupportedNotice: '이 브라우저는 Web Speech API(speechSynthesis)를 지원하지 않습니다.',
   },
 };
@@ -410,15 +449,35 @@ export function BgmSettingsSection({
   const speechCopy = EEW_SPEECH_UI_COPY[lang] ?? EEW_SPEECH_UI_COPY.ja;
   const selectedTrack = resolveSelectedBgmTrack(bgmSettings);
   const speechSupported = isSpeechSynthesisSupported();
+  const effectiveSpeechLang = resolveEffectiveSpeechLanguage(eewSpeechSettings.speechLanguage, lang);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [titleInput, setTitleInput] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>(() =>
+    getAvailableSpeechVoices(effectiveSpeechLang),
+  );
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const syncVoices = () => {
+      setAvailableVoices(getAvailableSpeechVoices(effectiveSpeechLang));
+    };
+    syncVoices();
+    return subscribeSpeechVoicesChanged(syncVoices);
+  }, [effectiveSpeechLang]);
+
+  const autoBestVoice = selectBestSpeechVoice(availableVoices, effectiveSpeechLang);
+  const localizedLocationLabel =
+    effectiveSpeechLang === 'ja'
+      ? currentLocation.label
+      : localizeJapanesePlaceName(currentLocation.prefectureName, effectiveSpeechLang);
+  const activeSpeechLangOption =
+    LANGUAGE_OPTIONS.find((opt) => opt.id === effectiveSpeechLang) ?? LANGUAGE_OPTIONS[0];
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -1003,8 +1062,8 @@ export function BgmSettingsSection({
         )}
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
-          {/* Location & Linkage Options */}
-          <div className="space-y-3 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-7">
+          {/* Location, Language & Linkage Options */}
+          <div className="space-y-3.5 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-7">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
@@ -1016,7 +1075,7 @@ export function BgmSettingsSection({
                     data-testid="eew-speech-current-location"
                     className="text-sm font-bold text-slate-900 dark:text-slate-50"
                   >
-                    {currentLocation.label}
+                    {localizedLocationLabel}
                   </span>
                   <span className="rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--nein-accent-text)]">
                     {currentLocation.source === 'geolocation'
@@ -1060,6 +1119,56 @@ export function BgmSettingsSection({
                 {gpsError}
               </p>
             )}
+
+            {/* 4-Language Speech Language Selector */}
+            <div className="border-t border-[var(--nein-border-subtle)] pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                <Languages className="h-3.5 w-3.5 text-[var(--nein-accent-text)]" aria-hidden="true" />
+                <span>{speechCopy.speechLangLabel}</span>
+              </div>
+              <div
+                role="radiogroup"
+                aria-label={speechCopy.speechLangLabel}
+                className="flex flex-wrap gap-1.5"
+              >
+                {(
+                  [
+                    { id: 'auto' as EewSpeechLanguageSetting, label: speechCopy.speechLangAuto, code: 'AUTO' },
+                    ...LANGUAGE_OPTIONS.map((opt) => ({
+                      id: opt.id as EewSpeechLanguageSetting,
+                      label: opt.nativeName,
+                      code: opt.codeLabel,
+                    })),
+                  ]
+                ).map((item) => {
+                  const selected = eewSpeechSettings.speechLanguage === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      data-testid={`eew-speech-lang-${item.id}`}
+                      onClick={() =>
+                        onChangeEewSpeechSettings((prev) => ({
+                          ...prev,
+                          speechLanguage: item.id,
+                          preferredVoiceName: '',
+                        }))
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                        selected
+                          ? 'border-[var(--nein-accent)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                          : 'border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 hover:border-[var(--nein-accent-border)] dark:text-slate-200'
+                      }`}
+                    >
+                      <span className="font-mono text-[9px] font-bold opacity-80">{item.code}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="space-y-2.5 border-t border-[var(--nein-border-subtle)] pt-3">
               {/* Auto-Duck BGM Switch */}
@@ -1112,34 +1221,105 @@ export function BgmSettingsSection({
             </div>
           </div>
 
-          {/* Speech Rate & Test Readout Panel */}
-          <div className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-5">
-            <div>
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
-                <label htmlFor="eew-speech-rate-range">{speechCopy.rateLabel}</label>
-                <span
-                  data-testid="eew-speech-rate-readout"
-                  className="font-mono text-xs font-bold tabular-nums text-[var(--nein-accent-text)]"
+          {/* Voice Model, Rate, Pitch & Test Readout Panel */}
+          <div className="flex flex-col justify-between gap-3.5 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-5">
+            <div className="space-y-3">
+              {/* Voice Model Selector */}
+              <div>
+                <label
+                  htmlFor="eew-speech-voice-select"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200"
                 >
-                  {eewSpeechSettings.rate.toFixed(2)}x
-                </span>
+                  <Mic className="h-3.5 w-3.5 text-[var(--nein-accent-text)]" aria-hidden="true" />
+                  <span>{speechCopy.voiceModelLabel}</span>
+                </label>
+                <select
+                  id="eew-speech-voice-select"
+                  data-testid="eew-speech-voice-select"
+                  value={eewSpeechSettings.preferredVoiceName}
+                  onChange={(e) =>
+                    onChangeEewSpeechSettings((prev) => ({
+                      ...prev,
+                      preferredVoiceName: e.target.value,
+                    }))
+                  }
+                  className="mt-1.5 w-full rounded-md border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2.5 py-1.5 text-xs text-slate-900 focus:border-[var(--nein-accent)] focus:outline-none dark:text-slate-100 cursor-pointer"
+                >
+                  <option value="">
+                    {autoBestVoice
+                      ? `${speechCopy.voiceAutoOption} — ${autoBestVoice.name}`
+                      : speechCopy.voiceAutoOption}
+                  </option>
+                  {availableVoices.map((voice) => (
+                    <option key={`${voice.name}-${voice.lang}`} value={voice.name}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+                {speechSupported && availableVoices.length === 0 && (
+                  <p className="mt-1 text-[10px] leading-snug text-slate-500 dark:text-slate-400">
+                    {speechCopy.voiceFallbackNote}
+                  </p>
+                )}
               </div>
-              <input
-                id="eew-speech-rate-range"
-                type="range"
-                min={0.8}
-                max={1.4}
-                step={0.05}
-                value={eewSpeechSettings.rate}
-                data-testid="eew-speech-rate-slider"
-                onChange={(e) =>
-                  onChangeEewSpeechSettings((prev) => ({
-                    ...prev,
-                    rate: clampSpeechRate(Number(e.target.value)),
-                  }))
-                }
-                className="mt-2 h-2 w-full accent-[var(--nein-accent)] cursor-pointer"
-              />
+
+              {/* Rate Slider */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  <label htmlFor="eew-speech-rate-range">{speechCopy.rateLabel}</label>
+                  <span
+                    data-testid="eew-speech-rate-readout"
+                    className="font-mono text-xs font-bold tabular-nums text-[var(--nein-accent-text)]"
+                  >
+                    {eewSpeechSettings.rate.toFixed(2)}x
+                  </span>
+                </div>
+                <input
+                  id="eew-speech-rate-range"
+                  type="range"
+                  min={0.8}
+                  max={1.4}
+                  step={0.05}
+                  value={eewSpeechSettings.rate}
+                  data-testid="eew-speech-rate-slider"
+                  onChange={(e) =>
+                    onChangeEewSpeechSettings((prev) => ({
+                      ...prev,
+                      rate: clampSpeechRate(Number(e.target.value)),
+                    }))
+                  }
+                  className="mt-1.5 h-2 w-full accent-[var(--nein-accent)] cursor-pointer"
+                />
+              </div>
+
+              {/* Pitch Slider */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  <label htmlFor="eew-speech-pitch-range">{speechCopy.pitchLabel}</label>
+                  <span
+                    data-testid="eew-speech-pitch-readout"
+                    className="font-mono text-xs font-bold tabular-nums text-[var(--nein-accent-text)]"
+                  >
+                    {eewSpeechSettings.pitch.toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  id="eew-speech-pitch-range"
+                  type="range"
+                  min={0.85}
+                  max={1.15}
+                  step={0.05}
+                  value={eewSpeechSettings.pitch}
+                  data-testid="eew-speech-pitch-slider"
+                  onChange={(e) =>
+                    onChangeEewSpeechSettings((prev) => ({
+                      ...prev,
+                      pitch: clampSpeechPitch(Number(e.target.value)),
+                    }))
+                  }
+                  className="mt-1.5 h-2 w-full accent-[var(--nein-accent)] cursor-pointer"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1190,8 +1370,16 @@ export function BgmSettingsSection({
 
         {/* Spoken Script Preview */}
         <div className="mt-3 rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3.5 py-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {speechCopy.previewLabel}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {speechCopy.previewLabel}
+            </span>
+            <span
+              data-testid="eew-speech-active-lang-badge"
+              className="rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--nein-accent-text)]"
+            >
+              {activeSpeechLangOption.codeLabel} · {activeSpeechLangOption.nativeName}
+            </span>
           </div>
           <p
             data-testid="eew-speech-preview"
