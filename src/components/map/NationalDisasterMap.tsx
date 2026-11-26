@@ -33,6 +33,7 @@ import {
   buildJmaRasrfTileUrl,
   computeVisibleTiles,
   fetchNearbyEvacuationShelters,
+  findLiveObservationIndex,
   latToWorldY,
   lonToWorldX,
 } from '../../utils/jmaTilesApi';
@@ -134,9 +135,9 @@ export function NationalDisasterMap({
 
   useEffect(() => {
     if (activeTimeline.length > 0) {
-      setFrameIndex(activeTimeline.length - 1);
+      setFrameIndex(findLiveObservationIndex(activeTimeline));
     }
-  }, [activeTimeline.length]);
+  }, [activeTimeline]);
 
   useEffect(() => {
     if (!isPlaying || activeTimeline.length <= 1) return;
@@ -166,9 +167,20 @@ export function NationalDisasterMap({
   }, [config.centerLat, config.centerLon, config.enabledLayers.evacuation_shelters, config.zoom]);
 
   useEffect(() => {
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      setRenderTick((t) => t + 1);
+    };
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setRenderTick((t) => t + 1));
+    ro.observe(canvas);
+    return () => ro.disconnect();
   }, []);
 
   const toggleFullscreen = async () => {

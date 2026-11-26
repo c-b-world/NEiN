@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildUnifiedTimeline } from './disasterConfigStorage';
 import { findMissingExtendedI18nKeys } from './i18nExtended';
-import { computeVisibleTiles, formatJmaCompactUtcToJst } from './jmaTilesApi';
+import {
+  buildHimawariTileUrl,
+  computeVisibleTiles,
+  findLiveObservationIndex,
+  formatJmaCompactUtcToJst,
+  jmaCompactUtcToIso,
+} from './jmaTilesApi';
 import {
   DEFAULT_NOTIFICATION_PREFS,
   recordAndDispatchNotification,
@@ -133,3 +139,20 @@ test('buildUnifiedTimeline sorts mixed P2P, JMA Quake, Tsunami, and XML items ne
   assert.equal(events[0].id, 'jmats:ts1');
   assert.equal(events[1].id, 'jmaq:jq1');
 });
+
+test('jmaTilesApi resolves live observation frame, ISO timestamps, and scales Himawari tiles when z > 6', () => {
+  assert.equal(jmaCompactUtcToIso('20261126012000'), '2026-11-26T01:20:00Z');
+  assert.equal(jmaCompactUtcToIso('invalid'), null);
+
+  const merged = [
+    { basetime: '20261126011000', validtime: '20261126011000', member: 'none', elements: ['hrpns'], labelJst: '' },
+    { basetime: '20261126012000', validtime: '20261126012000', member: 'none', elements: ['hrpns'], labelJst: '' },
+    { basetime: '20261126012000', validtime: '20261126013000', member: 'none', elements: ['hrpns'], labelJst: '' },
+    { basetime: '20261126012000', validtime: '20261126022000', member: 'none', elements: ['hrpns'], labelJst: '' },
+  ];
+  assert.equal(findLiveObservationIndex(merged), 1);
+
+  const satUrlZ8 = buildHimawariTileUrl(merged[1], 'B13', 8, 224, 100);
+  assert.ok(satUrlZ8.endsWith('/B13/TBB/6/56/25.jpg'));
+});
+

@@ -17,6 +17,7 @@ import {
   buildJmaNowcTileUrl,
   buildJmaRasrfTileUrl,
   computeVisibleTiles,
+  findLiveObservationIndex,
 } from '../../utils/jmaTilesApi';
 
 type RadarMode = 'hrpns' | 'rasrf' | 'lightning' | 'tornado' | 'satellite' | 'weather_map';
@@ -46,7 +47,7 @@ export function RadarSatelliteView({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const imgCacheRef = useRef<Map<string, HTMLImageElement | 'loading' | 'error'>>(new Map());
 
   const activeList: JmaTileTimeEntry[] = useMemo(() => {
     if (!timelines) return [];
@@ -59,12 +60,12 @@ export function RadarSatelliteView({
 
   useEffect(() => {
     if (activeList.length > 0) {
-      setFrameIdx(activeList.length - 1);
+      setFrameIdx(findLiveObservationIndex(activeList));
     } else {
       setFrameIdx(0);
     }
     setIsPlaying(false);
-  }, [mode, activeList.length]);
+  }, [mode, activeList]);
 
   useEffect(() => {
     if (!isPlaying || activeList.length <= 1) return;
@@ -75,10 +76,21 @@ export function RadarSatelliteView({
   }, [isPlaying, activeList.length, speedMs]);
 
   useEffect(() => {
-    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onFs = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      setRenderTick((v) => v + 1);
+    };
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setRenderTick((v) => v + 1));
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [mode]);
 
   const currentEntry = activeList[frameIdx] ?? null;
 
@@ -100,14 +112,19 @@ export function RadarSatelliteView({
     ctx.fillRect(0, 0, width, height);
 
     const tiles = computeVisibleTiles(36.2, 138.2, zoom, width, height);
-    const loadImg = (url: string) => {
+    const loadImg = (url: string): HTMLImageElement | null => {
       const hit = imgCacheRef.current.get(url);
+      if (hit === 'loading' || hit === 'error') return null;
       if (hit) return hit;
+      imgCacheRef.current.set(url, 'loading');
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         imgCacheRef.current.set(url, img);
         setRenderTick((v) => v + 1);
+      };
+      img.onerror = () => {
+        imgCacheRef.current.set(url, 'error');
       };
       img.src = url;
       return null;

@@ -103,7 +103,7 @@ export function DisasterHazardsView({
   const [riskType, setRiskType] = useState<KikikuruLayerType>('land');
   const [renderTick, setRenderTick] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const imgCacheRef = useRef<Map<string, HTMLImageElement | 'loading' | 'error'>>(new Map());
 
   const bulletins = xmlBulletins.filter(
     (b) =>
@@ -116,6 +116,14 @@ export function DisasterHazardsView({
     timelines && timelines.kikikuru.length > 0
       ? timelines.kikikuru[timelines.kikikuru.length - 1]
       : null;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setRenderTick((t) => t + 1));
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -134,14 +142,19 @@ export function DisasterHazardsView({
     ctx.fillRect(0, 0, width, height);
 
     const tiles = computeVisibleTiles(36.0, 138.2, 5, width, height);
-    const loadImg = (url: string) => {
+    const loadImg = (url: string): HTMLImageElement | null => {
       const hit = imgCacheRef.current.get(url);
+      if (hit === 'loading' || hit === 'error') return null;
       if (hit) return hit;
+      imgCacheRef.current.set(url, 'loading');
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         imgCacheRef.current.set(url, img);
         setRenderTick((t) => t + 1);
+      };
+      img.onerror = () => {
+        imgCacheRef.current.set(url, 'error');
       };
       img.src = url;
       return null;

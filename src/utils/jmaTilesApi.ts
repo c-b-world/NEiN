@@ -7,6 +7,17 @@ import { setSourceStatus } from './sourceHealthTracker';
 
 const TILE_SIZE = 256;
 
+export function jmaCompactUtcToIso(compact: string): string | null {
+  if (!/^\d{14}$/.test(compact)) return null;
+  const y = compact.slice(0, 4);
+  const m = compact.slice(4, 6);
+  const d = compact.slice(6, 8);
+  const hh = compact.slice(8, 10);
+  const mm = compact.slice(10, 12);
+  const ss = compact.slice(12, 14);
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}Z`;
+}
+
 /**
  * Formats JMA compact UTC timestamp "YYYYMMDDHHmmSS" into "MM/DD HH:mm JST".
  */
@@ -22,6 +33,20 @@ export function formatJmaCompactUtcToJst(compact: string): string {
   const jst = new Date(utcMs + 9 * 60 * 60 * 1000);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(jst.getUTCMonth() + 1)}/${p(jst.getUTCDate())} ${p(jst.getUTCHours())}:${p(jst.getUTCMinutes())} JST`;
+}
+
+/**
+ * Returns the index of the latest live observation frame (basetime === validtime)
+ * so merged observation+forecast lists open on live data instead of +60m forecast frames.
+ */
+export function findLiveObservationIndex(entries: JmaTileTimeEntry[]): number {
+  if (entries.length === 0) return 0;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].basetime === entries[i].validtime) {
+      return i;
+    }
+  }
+  return entries.length - 1;
 }
 
 export function lonToWorldX(lon: number, zoom: number): number {
@@ -136,8 +161,11 @@ export function buildHimawariTileUrl(
   y: number,
 ): string {
   const satZoom = Math.min(6, Math.max(3, z));
+  const shift = z - satZoom;
+  const sx = shift > 0 ? Math.floor(x / 2 ** shift) : x;
+  const sy = shift > 0 ? Math.floor(y / 2 ** shift) : y;
   const prod = band === 'B13' ? 'TBB' : 'ETC';
-  return `https://www.jma.go.jp/bosai/himawari/data/satimg/${entry.basetime}/fd/${entry.validtime}/${band}/${prod}/${satZoom}/${x}/${y}.jpg`;
+  return `https://www.jma.go.jp/bosai/himawari/data/satimg/${entry.basetime}/fd/${entry.validtime}/${band}/${prod}/${satZoom}/${sx}/${sy}.jpg`;
 }
 
 function normalizeTimeList(raw: unknown, defaultMember = 'none'): JmaTileTimeEntry[] {
@@ -258,11 +286,10 @@ export async function fetchAllRadarTimelines(forceRefresh = false): Promise<Rada
   };
 
   tileCache.set('all', { data: bundle, expiresAt: Date.now() + 3 * 60 * 1000 });
+  const liveHrpns = hrpns[findLiveObservationIndex(hrpns)] ?? hrpns[hrpns.length - 1];
   setSourceStatus('jma_radar_kikikuru', 'normal', {
     lastFetchedAt: now,
-    publishedAt: hrpns[hrpns.length - 1]?.validtime
-      ? formatJmaCompactUtcToJst(hrpns[hrpns.length - 1].validtime)
-      : null,
+    publishedAt: liveHrpns?.validtime ? jmaCompactUtcToIso(liveHrpns.validtime) : null,
     latencyMs,
     cacheHit: false,
     errorMessage: null,

@@ -1,4 +1,26 @@
-import { BellRing, Check, ChevronDown, Settings } from 'lucide-react';
+import {
+  Activity,
+  Anchor,
+  BellRing,
+  Check,
+  ChevronDown,
+  CloudRain,
+  CloudSun,
+  History,
+  LayoutDashboard,
+  Leaf,
+  type LucideIcon,
+  Map as MapIcon,
+  Monitor,
+  Mountain,
+  Radar,
+  Server,
+  Settings,
+  ShieldAlert,
+  Waves,
+  Wind,
+  Wrench,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { type AppLanguage, getMessages } from '../utils/i18n';
 
@@ -27,6 +49,7 @@ export interface NavSubItem {
   view: AppViewMode;
   matchViews?: AppViewMode[];
   testId?: string;
+  icon: LucideIcon;
   labels: Record<AppLanguage, string>;
 }
 
@@ -35,6 +58,9 @@ export interface NavGroupDef {
   title: string;
   testId: string;
   defaultView: AppViewMode;
+  icon: LucideIcon;
+  animClass: string;
+  alignRight?: boolean;
   items: NavSubItem[];
 }
 
@@ -44,16 +70,20 @@ export const NAV_GROUPS: NavGroupDef[] = [
     title: 'QUAKE',
     testId: 'nav-nein-quack',
     defaultView: 'quake',
+    icon: Activity,
+    animClass: 'nein-tab-quake',
     items: [
       {
         view: 'quake',
         matchViews: ['quake', 'jma_quake'],
         testId: 'quack-submenu-all',
+        icon: Activity,
         labels: { ja: '地震', en: 'Earthquake', zh: '地震', ko: '지진' },
       },
       {
         view: 'tsunami',
         testId: 'quack-submenu-tsunami',
+        icon: Waves,
         labels: { ja: '津波', en: 'Tsunami', zh: '海啸', ko: '지진해일' },
       },
     ],
@@ -63,30 +93,37 @@ export const NAV_GROUPS: NavGroupDef[] = [
     title: 'WEATHER',
     testId: 'nav-nein-weather',
     defaultView: 'weather',
+    icon: CloudSun,
+    animClass: 'nein-tab-weather',
     items: [
       {
         view: 'weather',
         testId: 'weather-submenu-forecast',
+        icon: CloudSun,
         labels: { ja: '天気予報', en: 'Forecast', zh: '天气预报', ko: '일기예보' },
       },
       {
         view: 'radar',
         testId: 'weather-submenu-radar',
+        icon: Radar,
         labels: { ja: 'レーダー', en: 'Radar', zh: '雷达', ko: '레이더' },
       },
       {
         view: 'typhoon',
         testId: 'weather-submenu-typhoon',
+        icon: Wind,
         labels: { ja: '台風', en: 'Typhoon', zh: '台风', ko: '태풍' },
       },
       {
         view: 'marine',
         testId: 'weather-submenu-marine',
+        icon: Anchor,
         labels: { ja: '海洋', en: 'Marine', zh: '海洋', ko: '해양' },
       },
       {
         view: 'environment',
         testId: 'weather-submenu-environment',
+        icon: Leaf,
         labels: { ja: '環境', en: 'Environment', zh: '环境', ko: '환경' },
       },
     ],
@@ -96,10 +133,13 @@ export const NAV_GROUPS: NavGroupDef[] = [
     title: 'DISASTER',
     testId: 'nav-disaster',
     defaultView: 'hazards',
+    icon: ShieldAlert,
+    animClass: 'nein-tab-disaster',
     items: [
       {
         view: 'hazards',
         testId: 'disaster-submenu-flood',
+        icon: CloudRain,
         labels: {
           ja: '洪水・土砂災害',
           en: 'Flood & Landslide',
@@ -110,11 +150,13 @@ export const NAV_GROUPS: NavGroupDef[] = [
       {
         view: 'volcano',
         testId: 'disaster-submenu-volcano',
+        icon: Mountain,
         labels: { ja: '火山', en: 'Volcano', zh: '火山', ko: '화산' },
       },
       {
         view: 'map',
         testId: 'nav-integrated-map',
+        icon: MapIcon,
         labels: { ja: '防災マップ', en: 'Disaster Map', zh: '防灾地图', ko: '방재 지도' },
       },
     ],
@@ -124,21 +166,27 @@ export const NAV_GROUPS: NavGroupDef[] = [
     title: 'TOOLS',
     testId: 'nav-tools',
     defaultView: 'monitor',
+    icon: Wrench,
+    animClass: 'nein-tab-tools',
+    alignRight: true,
     items: [
       {
         view: 'monitor',
         testId: 'tools-submenu-monitor',
+        icon: Monitor,
         labels: { ja: '監視モード', en: 'Monitor Mode', zh: '监测模式', ko: '모니터링' },
       },
       {
         view: 'replay',
         matchViews: ['replay', 'timeline'],
         testId: 'tools-submenu-replay',
+        icon: History,
         labels: { ja: '履歴再生', en: 'History Replay', zh: '历史回放', ko: '이력 재생' },
       },
       {
         view: 'status',
         testId: 'tools-submenu-status',
+        icon: Server,
         labels: { ja: '稼働状況', en: 'System Status', zh: '运行状态', ko: '가동 현황' },
       },
     ],
@@ -186,8 +234,11 @@ export function Header({
     };
   }, [openMenu]);
 
+  const homeActive = activeView === 'dashboard';
+  const settingsActive = activeView === 'settings';
+
   return (
-    <header className="border-b border-[var(--nein-border)] bg-[var(--nein-header)] transition-colors">
+    <header className="relative z-50 border-b border-[var(--nein-border)] bg-[var(--nein-header)] transition-colors">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <a
           href="#top"
@@ -201,27 +252,29 @@ export function Header({
           NEiN
         </a>
 
-        {/* Desktop Primary Top Bar matching HOME / QUAKE ▾ / WEATHER ▾ / DISASTER ▾ / TOOLS ▾ / ⚙ */}
+        {/* Desktop Primary Top Bar: [Icon] HOME / [Icon] QUAKE ▾ / [Icon] WEATHER ▾ / [Icon] DISASTER ▾ / [Icon] TOOLS ▾ / ⚙ */}
         <nav
           ref={navRef}
           aria-label={m.nav.navAria}
-          className="hidden md:flex items-center gap-6 lg:gap-7"
+          className="hidden md:flex items-center gap-4 lg:gap-6"
         >
           <button
             type="button"
             data-testid="nav-dashboard"
+            data-active={homeActive}
             onClick={() => {
               setOpenMenu(null);
               onSelectView('dashboard');
             }}
-            className={`relative inline-flex items-center py-1 text-sm font-bold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
-              activeView === 'dashboard'
+            className={`nein-tab-home relative inline-flex items-center gap-1.5 py-1 text-sm font-bold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
+              homeActive
                 ? 'text-[var(--nein-accent-text)]'
                 : 'text-slate-700 hover:text-slate-950 dark:text-slate-200 dark:hover:text-white'
             }`}
           >
+            <LayoutDashboard className="nein-tab-icon h-4 w-4 shrink-0" aria-hidden="true" />
             <span>HOME</span>
-            {activeView === 'dashboard' && (
+            {homeActive && (
               <span
                 aria-hidden="true"
                 className="absolute inset-x-0 -bottom-3 h-0.5 bg-[var(--nein-accent)]"
@@ -232,20 +285,24 @@ export function Header({
           {NAV_GROUPS.map((group) => {
             const active = isGroupActive(group, activeView);
             const expanded = openMenu === group.id;
+            const GroupIcon = group.icon;
             return (
               <div key={group.id} className="relative">
                 <button
                   type="button"
                   data-testid={group.testId}
+                  data-active={active}
+                  data-expanded={expanded}
                   aria-expanded={expanded}
                   aria-haspopup="menu"
                   onClick={() => setOpenMenu((prev) => (prev === group.id ? null : group.id))}
-                  className={`relative inline-flex items-center gap-1.5 py-1 text-sm font-bold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
+                  className={`${group.animClass} relative inline-flex items-center gap-1.5 py-1 text-sm font-bold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
                     active || expanded
                       ? 'text-[var(--nein-accent-text)]'
                       : 'text-slate-700 hover:text-slate-950 dark:text-slate-200 dark:hover:text-white'
                   }`}
                 >
+                  <GroupIcon className="nein-tab-icon h-4 w-4 shrink-0" aria-hidden="true" />
                   <span>{group.title}</span>
                   <ChevronDown
                     className={`h-3.5 w-3.5 transition-transform duration-150 ${
@@ -266,16 +323,20 @@ export function Header({
                     role="menu"
                     data-testid={group.id === 'quake' ? 'quack-dropdown-menu' : `${group.id}-dropdown-menu`}
                     aria-label={group.title}
-                    className="absolute left-0 top-full z-40 mt-3 w-52 overflow-hidden rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)] p-2 shadow-xl"
+                    className={`nein-dropdown-panel absolute top-full z-50 mt-3 w-52 overflow-hidden rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)] p-2 shadow-xl ${
+                      group.alignRight ? 'right-0 lg:left-0 lg:right-auto' : 'left-0'
+                    }`}
                   >
-                    <div className="mb-1.5 border-b border-[var(--nein-border-subtle)] px-2.5 pb-2 pt-1 text-xs font-extrabold tracking-wider text-slate-500 dark:text-slate-400">
-                      {group.title}
+                    <div className="mb-1.5 flex items-center gap-1.5 border-b border-[var(--nein-border-subtle)] px-2.5 pb-2 pt-1 text-xs font-extrabold tracking-wider text-slate-500 dark:text-slate-400">
+                      <GroupIcon className="h-3.5 w-3.5 text-[var(--nein-accent-text)]" aria-hidden="true" />
+                      <span>{group.title}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       {group.items.map((item) => {
                         const isItemActive = item.matchViews
                           ? item.matchViews.includes(activeView)
                           : activeView === item.view;
+                        const ItemIcon = item.icon;
                         return (
                           <button
                             key={item.view}
@@ -286,13 +347,23 @@ export function Header({
                               onSelectView(item.view);
                               setOpenMenu(null);
                             }}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                            className={`group flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                               isItemActive
                                 ? 'bg-[var(--nein-accent-soft)] font-semibold text-[var(--nein-accent-text)]'
                                 : 'text-slate-700 hover:bg-[var(--nein-sub)] hover:text-slate-950 dark:text-slate-200 dark:hover:text-white'
                             }`}
                           >
-                            <span>{item.labels[lang]}</span>
+                            <span className="inline-flex items-center gap-2">
+                              <ItemIcon
+                                className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:scale-110 ${
+                                  isItemActive
+                                    ? 'text-[var(--nein-accent-text)]'
+                                    : 'text-slate-500 group-hover:text-[var(--nein-accent-text)] dark:text-slate-400'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span>{item.labels[lang]}</span>
+                            </span>
                             {isItemActive && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
                           </button>
                         );
@@ -307,23 +378,24 @@ export function Header({
           <button
             type="button"
             data-testid="nav-system-settings"
+            data-active={settingsActive}
             aria-label={m.nav.settings}
             title={m.nav.settings}
             onClick={() => {
               setOpenMenu(null);
               onSelectView('settings');
             }}
-            className={`relative inline-flex items-center justify-center rounded-md p-1.5 transition-colors shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
-              activeView === 'settings'
+            className={`nein-tab-settings relative inline-flex items-center justify-center rounded-md p-1 transition-colors shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nein-accent)] ${
+              settingsActive
                 ? 'text-[var(--nein-accent-text)]'
                 : 'text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white'
             }`}
           >
-            <Settings className="h-[19px] w-[19px]" aria-hidden="true" />
-            {activeView === 'settings' && (
+            <Settings className="nein-tab-icon h-[18px] w-[18px]" aria-hidden="true" />
+            {settingsActive && (
               <span
                 aria-hidden="true"
-                className="absolute inset-x-0 -bottom-2.5 h-0.5 bg-[var(--nein-accent)]"
+                className="absolute inset-x-0 -bottom-3 h-0.5 bg-[var(--nein-accent)]"
               />
             )}
           </button>

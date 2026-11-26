@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AlertCircle, ChevronDown, Settings } from 'lucide-react';
+import { AlertCircle, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EEWWarningModal } from './components/EEWWarningModal';
 import {
@@ -109,6 +109,7 @@ export default function App() {
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
+  const mobileNavRef = useRef<HTMLDivElement | null>(null);
 
   const m = getMessages(lang);
   const ext = getExtendedMessages(lang);
@@ -124,6 +125,24 @@ export default function App() {
     applyLanguageToDocument(lang);
     saveLanguage(lang);
   }, [lang]);
+
+  useEffect(() => {
+    if (!mobileOpenGroup) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (mobileNavRef.current && !mobileNavRef.current.contains(e.target as Node)) {
+        setMobileOpenGroup(null);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpenGroup(null);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [mobileOpenGroup]);
 
   const handleToggleThemeMode = () => {
     setThemeSettings((prev) => ({
@@ -183,12 +202,18 @@ export default function App() {
         onSelectView={(v) => {
           setActiveView(v);
           setMobileOpenGroup(null);
+          if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
         }}
         onOpenTestModal={() => setIsTestModalOpen(true)}
       />
 
-      {/* Mobile Grouped Navigation (< md) matching HOME / QUAKE ▾ / WEATHER ▾ / DISASTER ▾ / TOOLS ▾ / ⚙ */}
-      <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3.5 py-2.5 md:hidden">
+      {/* Mobile Grouped Navigation (< md) matching [Icon] HOME / [Icon] QUAKE ▾ / [Icon] WEATHER ▾ / [Icon] DISASTER ▾ / [Icon] TOOLS ▾ / ⚙ */}
+      <div
+        ref={mobileNavRef}
+        className="relative z-40 border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3.5 py-2.5 md:hidden"
+      >
         <div
           role="tablist"
           aria-label={m.nav.mobileModeSwitcher}
@@ -197,40 +222,46 @@ export default function App() {
           <button
             type="button"
             role="tab"
+            data-active={activeView === 'dashboard'}
             aria-selected={activeView === 'dashboard'}
             onClick={() => {
               setActiveView('dashboard');
               setMobileOpenGroup(null);
             }}
-            className={`rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
+            className={`nein-tab-home inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
               activeView === 'dashboard'
                 ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                 : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
             }`}
           >
-            HOME
+            <LayoutDashboard className="nein-tab-icon h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>HOME</span>
           </button>
 
           {NAV_GROUPS.map((group) => {
             const active = isGroupActive(group, activeView);
             const expanded = mobileOpenGroup === group.id;
+            const GroupIcon = group.icon;
             return (
               <button
                 key={group.id}
                 type="button"
                 role="tab"
                 data-testid={group.id === 'quake' ? 'mobile-nav-nein-quack' : undefined}
+                data-active={active}
+                data-expanded={expanded}
                 aria-selected={active}
                 aria-expanded={expanded}
                 onClick={() =>
                   setMobileOpenGroup((prev) => (prev === group.id ? null : group.id))
                 }
-                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
+                className={`${group.animClass} inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
                   active || expanded
                     ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                     : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
                 }`}
               >
+                <GroupIcon className="nein-tab-icon h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>{group.title}</span>
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}
@@ -244,24 +275,25 @@ export default function App() {
             type="button"
             role="tab"
             data-testid="mobile-nav-system-settings"
+            data-active={activeView === 'settings'}
             aria-label={m.nav.settings}
             aria-selected={activeView === 'settings'}
             onClick={() => {
               setActiveView('settings');
               setMobileOpenGroup(null);
             }}
-            className={`inline-flex items-center justify-center rounded-md border p-1.5 transition-colors cursor-pointer ${
+            className={`nein-tab-settings inline-flex items-center justify-center rounded-md border p-1.5 transition-colors cursor-pointer ${
               activeView === 'settings'
                 ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                 : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
             }`}
           >
-            <Settings className="h-4 w-4" aria-hidden="true" />
+            <Settings className="nein-tab-icon h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
         {mobileOpenGroup && (
-          <div className="mt-2.5 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-2">
+          <div className="nein-dropdown-panel mt-2.5 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-2">
             <div className="mb-1.5 border-b border-[var(--nein-border-subtle)] px-2 pb-1.5 text-[11px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400">
               {NAV_GROUPS.find((g) => g.id === mobileOpenGroup)?.title}
             </div>
@@ -270,6 +302,7 @@ export default function App() {
                 const isItemActive = item.matchViews
                   ? item.matchViews.includes(activeView)
                   : activeView === item.view;
+                const ItemIcon = item.icon;
                 return (
                   <button
                     key={item.view}
@@ -278,13 +311,14 @@ export default function App() {
                       setActiveView(item.view);
                       setMobileOpenGroup(null);
                     }}
-                    className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                       isItemActive
                         ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                         : 'border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 dark:text-slate-200'
                     }`}
                   >
-                    {item.labels[lang]}
+                    <ItemIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{item.labels[lang]}</span>
                   </button>
                 );
               })}
@@ -371,7 +405,10 @@ export default function App() {
         />
       )}
 
-      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
+      <main
+        key={activeView}
+        className="nein-view-stage mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6"
+      >
         {activeView === 'dashboard' ? (
           <ComprehensiveDashboard
             lang={lang}
