@@ -407,12 +407,54 @@
   }
 }
 
+@keyframes nein-wave-drift-slow {
+  0%, 100% {
+    transform: translateX(12px);
+  }
+  50% {
+    transform: translateX(-22px);
+  }
+}
+
+@keyframes nein-aurora-sway {
+  0%, 100% {
+    opacity: 0.72;
+    transform: translateX(0px) scaleY(1);
+  }
+  50% {
+    opacity: 0.96;
+    transform: translateX(26px) scaleY(1.06);
+  }
+}
+
+@keyframes nein-lantern-glow {
+  0%, 100% {
+    opacity: 0.84;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .nein-sea-wave-a {
   animation: nein-wave-drift 11s ease-in-out infinite;
 }
 
 .nein-sea-wave-b {
   animation: nein-wave-drift-reverse 15s ease-in-out infinite;
+}
+
+.nein-sea-wave-c {
+  animation: nein-wave-drift-slow 19s ease-in-out infinite;
+}
+
+.nein-aurora-ribbon {
+  transform-origin: center;
+  animation: nein-aurora-sway 14s ease-in-out infinite;
+}
+
+.nein-lantern-glow {
+  animation: nein-lantern-glow 5.2s ease-in-out infinite;
 }
 
 @keyframes nein-splash-logo-in {
@@ -469,6 +511,9 @@
   .nein-view-stage,
   .nein-sea-wave-a,
   .nein-sea-wave-b,
+  .nein-sea-wave-c,
+  .nein-aurora-ribbon,
+  .nein-lantern-glow,
   .nein-splash-logo,
   .nein-splash-rule,
   .nein-splash-ring {
