@@ -49,6 +49,7 @@ import {
 } from '../utils/themeSettings';
 import { formatJstTimestamp } from '../utils/weatherParser';
 import type { BgmSettings } from '../utils/bgmManager';
+import type { CurrentLocationContext, EewSpeechSettings } from '../utils/eewSpeech';
 import { BgmSettingsSection } from './BgmSettingsSection';
 
 const BG_MOTION_COPY: Record<
@@ -154,6 +155,14 @@ interface SystemSettingsPanelProps {
   onClearNotificationHistory: () => void;
   bgmSettings: BgmSettings;
   onChangeBgmSettings: (updater: (prev: BgmSettings) => BgmSettings) => void;
+  eewSpeechSettings: EewSpeechSettings;
+  onChangeEewSpeechSettings: (updater: (prev: EewSpeechSettings) => EewSpeechSettings) => void;
+  currentLocation: CurrentLocationContext;
+  isEewSpeaking: boolean;
+  lastSpokenScript: string | null;
+  speechError: string | null;
+  onTestEewSpeech: () => void;
+  onStopEewSpeech: () => void;
 }
 
 export function SystemSettingsPanel({
@@ -187,6 +196,14 @@ export function SystemSettingsPanel({
   onClearNotificationHistory,
   bgmSettings,
   onChangeBgmSettings,
+  eewSpeechSettings,
+  onChangeEewSpeechSettings,
+  currentLocation,
+  isEewSpeaking,
+  lastSpokenScript,
+  speechError,
+  onTestEewSpeech,
+  onStopEewSpeech,
 }: SystemSettingsPanelProps) {
   const m = getMessages(lang);
   const ext = getExtendedMessages(lang);
@@ -645,11 +662,20 @@ export function SystemSettingsPanel({
         </div>
       </div>
 
-      {/* 3.7. BGM Settings (ON/OFF, Stylish Dropdown, .mp3/.mp4 Upload, YouTube/Spotify Embed, Loop, Volume) */}
+      {/* 3.7. BGM Settings (ON/OFF, Stylish Dropdown, .mp3/.mp4 Upload, YouTube/Spotify Embed, Loop, Volume) & EEW Speech Link */}
       <BgmSettingsSection
         lang={lang}
         bgmSettings={bgmSettings}
         onChangeBgmSettings={onChangeBgmSettings}
+        eewSpeechSettings={eewSpeechSettings}
+        onChangeEewSpeechSettings={onChangeEewSpeechSettings}
+        currentLocation={currentLocation}
+        isEewSpeaking={isEewSpeaking}
+        lastSpokenScript={lastSpokenScript}
+        speechError={speechError}
+        onTestEewSpeech={onTestEewSpeech}
+        onStopEewSpeech={onStopEewSpeech}
+        onDetectCurrentLocation={onDetectNearestRegion}
       />
 
       {/* 4. Operational Settings (Notifications, Sound, Polling) */}

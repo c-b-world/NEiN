@@ -4,11 +4,15 @@ import {
   FileAudio,
   Film,
   Link2,
+  LocateFixed,
+  MapPin,
+  Megaphone,
   Music2,
   Plus,
   Radio,
   Repeat,
   Sparkles,
+  Square,
   Trash2,
   Upload,
   Volume2,
@@ -27,12 +31,27 @@ import {
   resolveSelectedBgmTrack,
   saveBgmMediaBlob,
 } from '../utils/bgmManager';
+import {
+  type CurrentLocationContext,
+  type EewSpeechSettings,
+  clampSpeechRate,
+  isSpeechSynthesisSupported,
+} from '../utils/eewSpeech';
 import type { AppLanguage } from '../utils/i18n';
 
 interface BgmSettingsSectionProps {
   lang: AppLanguage;
   bgmSettings: BgmSettings;
   onChangeBgmSettings: (updater: (prev: BgmSettings) => BgmSettings) => void;
+  eewSpeechSettings: EewSpeechSettings;
+  onChangeEewSpeechSettings: (updater: (prev: EewSpeechSettings) => EewSpeechSettings) => void;
+  currentLocation: CurrentLocationContext;
+  isEewSpeaking: boolean;
+  lastSpokenScript: string | null;
+  speechError: string | null;
+  onTestEewSpeech: () => void;
+  onStopEewSpeech: () => void;
+  onDetectCurrentLocation: (lat: number, lon: number) => void;
 }
 
 const BGM_COPY: Record<
@@ -214,6 +233,135 @@ const BGM_COPY: Record<
   },
 };
 
+const EEW_SPEECH_UI_COPY: Record<
+  AppLanguage,
+  {
+    title: string;
+    subtitle: string;
+    enabledOn: string;
+    enabledOff: string;
+    locationLabel: string;
+    sourceGps: string;
+    sourceRegistered: string;
+    sourceFallback: string;
+    detectGpsBtn: string;
+    gpsDenied: string;
+    duckLabel: string;
+    duckDesc: string;
+    adviceLabel: string;
+    adviceDesc: string;
+    rateLabel: string;
+    testBtn: string;
+    stopBtn: string;
+    speakingBadge: string;
+    bgmDuckingBadge: string;
+    previewLabel: string;
+    previewPlaceholder: string;
+    unsupportedNotice: string;
+  }
+> = {
+  ja: {
+    title: '緊急地震速報・現在地防災アナウンス（Web Speech API × BGM連携）',
+    subtitle:
+      '緊急地震速報の発表時に、現在地の予測震度・震源距離・津波や避難行動を音声合成で自動読み上げします。再生中のBGMは自動で一時消音されます。',
+    enabledOn: '音声読み上げ ON',
+    enabledOff: '音声読み上げ OFF',
+    locationLabel: '読み上げ対象の現在地',
+    sourceGps: 'GPS現在地',
+    sourceRegistered: '優先登録地域',
+    sourceFallback: '既定地域',
+    detectGpsBtn: '現在地を取得',
+    gpsDenied: '位置情報の取得が許可されなかったか、ブラウザで利用できませんでした。',
+    duckLabel: '読み上げ中にBGMを自動一時消音',
+    duckDesc: 'BgmPlayerEngineと連携し、音声読み上げ中は内蔵BGM・MP3/MP4・YouTubeの音量を自動で下げます。',
+    adviceLabel: '避難行動・津波/気象警報アドバイスを含める',
+    adviceDesc: '現在地が警報対象の場合の安全確保や、発表中の気象警報・津波リスクもあわせて読み上げます。',
+    rateLabel: '読み上げ速度',
+    testBtn: 'テスト読み上げ（BGM連携確認）',
+    stopBtn: '読み上げ停止',
+    speakingBadge: '音声読み上げ中',
+    bgmDuckingBadge: 'BGM自動消音中',
+    previewLabel: '最新の読み上げ内容',
+    previewPlaceholder: '「テスト読み上げ」を押すと、現在地向けの防災アナウンスを音声合成で確認できます。',
+    unsupportedNotice: 'お使いのブラウザは Web Speech API（speechSynthesis）に対応していないため音声出力できません。',
+  },
+  en: {
+    title: 'EEW Local Disaster Voice Readout (Web Speech API × BGM Link)',
+    subtitle:
+      'Automatically speaks local predicted intensity, epicenter distance, tsunami cautions, and safety guidance when an Earthquake Early Warning arrives while auto-muting BGM.',
+    enabledOn: 'Voice Alert ON',
+    enabledOff: 'Voice Alert OFF',
+    locationLabel: 'Target Current Location',
+    sourceGps: 'GPS Location',
+    sourceRegistered: 'Primary Region',
+    sourceFallback: 'Default Region',
+    detectGpsBtn: 'Use Current Location',
+    gpsDenied: 'Location access was denied or is unavailable in this browser.',
+    duckLabel: 'Auto-mute BGM during voice alerts',
+    duckDesc: 'Links with BgmPlayerEngine to mute built-in ambient, MP3/MP4, and YouTube playback while speaking.',
+    adviceLabel: 'Include safety & tsunami/weather guidance',
+    adviceDesc: 'Adds protective actions, coastal tsunami evacuation prompts, and active local weather warnings.',
+    rateLabel: 'Speech Rate',
+    testBtn: 'Test Voice Readout (Check BGM Link)',
+    stopBtn: 'Stop Readout',
+    speakingBadge: 'Speaking Now',
+    bgmDuckingBadge: 'BGM Auto-Muted',
+    previewLabel: 'Latest Broadcast Script',
+    previewPlaceholder: 'Click "Test Voice Readout" to preview local disaster speech and automatic BGM muting.',
+    unsupportedNotice: 'Web Speech API (speechSynthesis) is not supported in this browser.',
+  },
+  zh: {
+    title: '紧急地震速报・当前位置防灾语音播报（Web Speech API × BGM联动）',
+    subtitle:
+      '发布紧急地震速报时，使用语音合成自动播报当前位置的预测震度、震中距离与避难提示，并自动临时静音正在播放的 BGM。',
+    enabledOn: '语音播报开启',
+    enabledOff: '语音播报关闭',
+    locationLabel: '播报目标当前位置',
+    sourceGps: 'GPS定位',
+    sourceRegistered: '优先关注地区',
+    sourceFallback: '默认地区',
+    detectGpsBtn: '获取当前位置',
+    gpsDenied: '未能获取定位权限或当前浏览器不支持定位。',
+    duckLabel: '播报期间自动临时静音 BGM',
+    duckDesc: '与 BgmPlayerEngine 联动，播报语音时自动静音内置环境音、MP3/MP4 与 YouTube。',
+    adviceLabel: '包含避难行动与海啸/气象警报提示',
+    adviceDesc: '播报当前位置的防护建议、海啸撤离提示及生效中的本地气象警报。',
+    rateLabel: '播报语速',
+    testBtn: '测试语音播报（验证BGM联动）',
+    stopBtn: '停止播报',
+    speakingBadge: '正在语音播报',
+    bgmDuckingBadge: 'BGM自动静音中',
+    previewLabel: '最新播报内容',
+    previewPlaceholder: '点击「测试语音播报」即可试听当前位置的防灾语音并确认 BGM 自动静音联动。',
+    unsupportedNotice: '当前浏览器不支持 Web Speech API（speechSynthesis）。',
+  },
+  ko: {
+    title: '긴급지진속보・현재 위치 재난 음성 안내 (Web Speech API × BGM 연동)',
+    subtitle:
+      '긴급지진속보 발표 시 현재 위치의 예상 진도・진원 거리・대피 요령을 음성 합성으로 안내하며 재생 중인 BGM을 자동으로 잠시 음소거합니다.',
+    enabledOn: '음성 안내 ON',
+    enabledOff: '음성 안내 OFF',
+    locationLabel: '안내 대상 현재 위치',
+    sourceGps: 'GPS 현재 위치',
+    sourceRegistered: '우선 등록 지역',
+    sourceFallback: '기본 지역',
+    detectGpsBtn: '현재 위치 가져오기',
+    gpsDenied: '위치 권한이 거부되었거나 브라우저에서 위치 정보를 사용할 수 없습니다.',
+    duckLabel: '음성 안내 중 BGM 자동 음소거',
+    duckDesc: 'BgmPlayerEngine과 연동되어 음성 안내 중 내장 BGM・MP3/MP4・YouTube 볼륨을 자동 음소거합니다.',
+    adviceLabel: '대피 요령 및 쓰나미/기상 경보 안내 포함',
+    adviceDesc: '안전 행동 요령, 해안 쓰나미 대피 안내 및 현재 위치 기상 경보를 함께 읽어줍니다.',
+    rateLabel: '음성 속도',
+    testBtn: '테스트 음성 안내 (BGM 연동 확인)',
+    stopBtn: '안내 중지',
+    speakingBadge: '음성 안내 중',
+    bgmDuckingBadge: 'BGM 자동 음소거 중',
+    previewLabel: '최근 안내 스크립트',
+    previewPlaceholder: '「테스트 음성 안내」를 눌러 현재 위치 재난 음성과 BGM 자동 음소거 연동을 확인하세요.',
+    unsupportedNotice: '이 브라우저는 Web Speech API(speechSynthesis)를 지원하지 않습니다.',
+  },
+};
+
 function renderSourceIcon(source: BgmSourceType, className = 'h-4 w-4') {
   switch (source) {
     case 'mp3':
@@ -248,14 +396,26 @@ export function BgmSettingsSection({
   lang,
   bgmSettings,
   onChangeBgmSettings,
+  eewSpeechSettings,
+  onChangeEewSpeechSettings,
+  currentLocation,
+  isEewSpeaking,
+  lastSpokenScript,
+  speechError,
+  onTestEewSpeech,
+  onStopEewSpeech,
+  onDetectCurrentLocation,
 }: BgmSettingsSectionProps) {
   const copy = BGM_COPY[lang] ?? BGM_COPY.ja;
+  const speechCopy = EEW_SPEECH_UI_COPY[lang] ?? EEW_SPEECH_UI_COPY.ja;
   const selectedTrack = resolveSelectedBgmTrack(bgmSettings);
+  const speechSupported = isSpeechSynthesisSupported();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [titleInput, setTitleInput] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -771,6 +931,285 @@ export function BgmSettingsSection({
           {feedback.text}
         </div>
       )}
+
+      {/* EEW Voice Readout × BgmPlayerEngine Linkage Subsection */}
+      <div
+        data-testid="eew-speech-settings-section"
+        className="mt-5 border-t border-[var(--nein-border-subtle)] pt-5"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10">
+              <Megaphone className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {speechCopy.title}
+              </h3>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                {speechCopy.subtitle}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={eewSpeechSettings.enabled}
+            aria-label={speechCopy.title}
+            data-testid="eew-speech-toggle"
+            onClick={() =>
+              onChangeEewSpeechSettings((prev) => ({
+                ...prev,
+                enabled: !prev.enabled,
+              }))
+            }
+            className="inline-flex min-h-[42px] items-center justify-between gap-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] px-4 py-2 text-xs font-semibold text-slate-900 transition-colors hover:border-[var(--nein-accent-border)] dark:text-slate-100 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
+          >
+            <span className="flex items-center gap-2">
+              <Megaphone
+                className={`h-4 w-4 ${
+                  eewSpeechSettings.enabled ? 'text-red-600 dark:text-red-400' : 'text-slate-500'
+                }`}
+                aria-hidden="true"
+              />
+              <span>
+                {eewSpeechSettings.enabled ? speechCopy.enabledOn : speechCopy.enabledOff}
+              </span>
+            </span>
+
+            <span
+              aria-hidden="true"
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                eewSpeechSettings.enabled ? 'bg-[var(--nein-accent)]' : 'bg-slate-400'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                  eewSpeechSettings.enabled ? 'translate-x-4.5' : 'translate-x-1'
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {!speechSupported && (
+          <div
+            role="alert"
+            className="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+          >
+            {speechCopy.unsupportedNotice}
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
+          {/* Location & Linkage Options */}
+          <div className="space-y-3 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-7">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  {speechCopy.locationLabel}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-[var(--nein-accent-text)]" aria-hidden="true" />
+                  <span
+                    data-testid="eew-speech-current-location"
+                    className="text-sm font-bold text-slate-900 dark:text-slate-50"
+                  >
+                    {currentLocation.label}
+                  </span>
+                  <span className="rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--nein-accent-text)]">
+                    {currentLocation.source === 'geolocation'
+                      ? speechCopy.sourceGps
+                      : currentLocation.source === 'registered'
+                        ? speechCopy.sourceRegistered
+                        : speechCopy.sourceFallback}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                data-testid="eew-speech-gps-btn"
+                onClick={() => {
+                  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+                    setGpsError(speechCopy.gpsDenied);
+                    return;
+                  }
+                  setGpsError(null);
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      onDetectCurrentLocation(pos.coords.latitude, pos.coords.longitude);
+                      setGpsError(null);
+                    },
+                    () => {
+                      setGpsError(speechCopy.gpsDenied);
+                    },
+                    { timeout: 8000 },
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-accent-border)] bg-[var(--nein-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--nein-accent-text)] transition-colors hover:bg-[var(--nein-accent-soft)] cursor-pointer"
+              >
+                <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{speechCopy.detectGpsBtn}</span>
+              </button>
+            </div>
+
+            {gpsError && (
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                {gpsError}
+              </p>
+            )}
+
+            <div className="space-y-2.5 border-t border-[var(--nein-border-subtle)] pt-3">
+              {/* Auto-Duck BGM Switch */}
+              <label className="flex items-start justify-between gap-3 cursor-pointer">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    {speechCopy.duckLabel}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                    {speechCopy.duckDesc}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  data-testid="eew-speech-duck-toggle"
+                  checked={eewSpeechSettings.duckBgmDuringSpeech}
+                  onChange={(e) =>
+                    onChangeEewSpeechSettings((prev) => ({
+                      ...prev,
+                      duckBgmDuringSpeech: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--nein-accent)] cursor-pointer"
+                />
+              </label>
+
+              {/* Include Preparedness Advice Switch */}
+              <label className="flex items-start justify-between gap-3 cursor-pointer">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    {speechCopy.adviceLabel}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                    {speechCopy.adviceDesc}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  data-testid="eew-speech-advice-toggle"
+                  checked={eewSpeechSettings.includePreparednessAdvice}
+                  onChange={(e) =>
+                    onChangeEewSpeechSettings((prev) => ({
+                      ...prev,
+                      includePreparednessAdvice: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--nein-accent)] cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Speech Rate & Test Readout Panel */}
+          <div className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--nein-border)] bg-[var(--nein-sub)] p-4 lg:col-span-5">
+            <div>
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <label htmlFor="eew-speech-rate-range">{speechCopy.rateLabel}</label>
+                <span
+                  data-testid="eew-speech-rate-readout"
+                  className="font-mono text-xs font-bold tabular-nums text-[var(--nein-accent-text)]"
+                >
+                  {eewSpeechSettings.rate.toFixed(2)}x
+                </span>
+              </div>
+              <input
+                id="eew-speech-rate-range"
+                type="range"
+                min={0.8}
+                max={1.4}
+                step={0.05}
+                value={eewSpeechSettings.rate}
+                data-testid="eew-speech-rate-slider"
+                onChange={(e) =>
+                  onChangeEewSpeechSettings((prev) => ({
+                    ...prev,
+                    rate: clampSpeechRate(Number(e.target.value)),
+                  }))
+                }
+                className="mt-2 h-2 w-full accent-[var(--nein-accent)] cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-2">
+              {isEewSpeaking ? (
+                <button
+                  type="button"
+                  data-testid="eew-speech-test-btn"
+                  onClick={onStopEewSpeech}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/60 bg-red-600 px-3.5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-red-500 cursor-pointer"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  <span>{speechCopy.stopBtn}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!speechSupported}
+                  data-testid="eew-speech-test-btn"
+                  onClick={onTestEewSpeech}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--nein-accent)] px-3.5 py-2.5 text-xs font-bold text-[var(--nein-accent-contrast)] transition-opacity hover:opacity-90 disabled:opacity-45 cursor-pointer"
+                >
+                  <Volume2 className="h-4 w-4" aria-hidden="true" />
+                  <span>{speechCopy.testBtn}</span>
+                </button>
+              )}
+
+              {isEewSpeaking && (
+                <div
+                  role="status"
+                  data-testid="eew-speech-active-status"
+                  className="flex flex-wrap items-center gap-2 text-[11px] font-semibold"
+                >
+                  <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+                    <span>{speechCopy.speakingBadge}</span>
+                  </span>
+                  {bgmSettings.enabled && eewSpeechSettings.duckBgmDuringSpeech && (
+                    <span className="inline-flex items-center gap-1 rounded border border-red-400/50 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">
+                      <VolumeX className="h-3 w-3" aria-hidden="true" />
+                      <span>{speechCopy.bgmDuckingBadge}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Spoken Script Preview */}
+        <div className="mt-3 rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3.5 py-2.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {speechCopy.previewLabel}
+          </div>
+          <p
+            data-testid="eew-speech-preview"
+            className="mt-1 text-xs leading-relaxed text-slate-700 dark:text-slate-200"
+          >
+            {lastSpokenScript || speechCopy.previewPlaceholder}
+          </p>
+          {speechError && (
+            <p
+              role="status"
+              data-testid="eew-speech-error-notice"
+              className="mt-2 rounded border border-amber-400/45 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-900 dark:text-amber-200"
+            >
+              {speechError}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

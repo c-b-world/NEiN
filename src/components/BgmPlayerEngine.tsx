@@ -3,12 +3,14 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Megaphone,
   Music2,
   Pause,
   Play,
   Power,
   Radio,
   Repeat,
+  Square,
   Volume2,
   VolumeX,
   Youtube,
@@ -28,6 +30,9 @@ interface BgmPlayerEngineProps {
   lang: AppLanguage;
   settings: BgmSettings;
   isEmergencyDucking: boolean;
+  isSpeechReading?: boolean;
+  speechStatusText?: string | null;
+  onStopSpeech?: () => void;
   onToggleEnabled: () => void;
   onToggleMute: () => void;
   onChangeVolume: (vol: number) => void;
@@ -152,6 +157,10 @@ const DOCK_COPY: Record<
     ytErrNotFound: string;
     ytErrGeneric: string;
     openYoutube: string;
+    duckedBySpeech: string;
+    duckedByEew: string;
+    bgmMutedForSpeech: string;
+    stopSpeech: string;
   }
 > = {
   ja: {
@@ -177,6 +186,10 @@ const DOCK_COPY: Record<
     ytErrNotFound: '動画が見つからないか、非公開・終了済みライブのため再生できません。',
     ytErrGeneric: 'YouTube動画の読み込みに失敗しました。URLまたは再生可否をご確認ください。',
     openYoutube: 'YouTubeで開く',
+    duckedBySpeech: '音声読み上げ中 · BGM消音',
+    duckedByEew: '緊急地震速報 · BGM消音',
+    bgmMutedForSpeech: '緊急音声を聞き取りやすくするためBGMを一時消音しています',
+    stopSpeech: '停止',
   },
   en: {
     playing: 'BGM Playing',
@@ -201,6 +214,10 @@ const DOCK_COPY: Record<
     ytErrNotFound: 'Video not found, private, or an ended live stream that cannot be embedded.',
     ytErrGeneric: 'Failed to load YouTube playback. Please check the URL.',
     openYoutube: 'Open on YouTube',
+    duckedBySpeech: 'Voice Alert Reading · BGM Ducked',
+    duckedByEew: 'EEW Active · BGM Ducked',
+    bgmMutedForSpeech: 'BGM is automatically muted so emergency voice guidance stays clear.',
+    stopSpeech: 'Stop Voice',
   },
   zh: {
     playing: 'BGM播放中',
@@ -224,6 +241,10 @@ const DOCK_COPY: Record<
     ytErrNotFound: '找不到该视频，或为私密/已结束的直播无法嵌入。',
     ytErrGeneric: 'YouTube 播放加载失败，请检查链接。',
     openYoutube: '在 YouTube 打开',
+    duckedBySpeech: '紧急语音播报中 · BGM自动静音',
+    duckedByEew: '紧急地震速报 · BGM自动静音',
+    bgmMutedForSpeech: '为确保防灾语音清晰可听，已自动临时静音 BGM。',
+    stopSpeech: '停止播报',
   },
   ko: {
     playing: 'BGM 재생 중',
@@ -248,6 +269,10 @@ const DOCK_COPY: Record<
     ytErrNotFound: '영상을 찾을 수 없거나 비공개/종료된 라이브입니다.',
     ytErrGeneric: 'YouTube 재생을 불러오지 못했습니다. URL을 확인해 주세요.',
     openYoutube: 'YouTube에서 열기',
+    duckedBySpeech: '재난 음성 안내 중 · BGM 임시 음소거',
+    duckedByEew: '긴급지진속보 · BGM 임시 음소거',
+    bgmMutedForSpeech: '긴급 음성 안내가 잘 들리도록 BGM을 자동으로 잠시 음소거했습니다.',
+    stopSpeech: '음성 중지',
   },
 };
 
@@ -414,13 +439,17 @@ export function BgmPlayerEngine({
   lang,
   settings,
   isEmergencyDucking,
+  isSpeechReading = false,
+  speechStatusText = null,
+  onStopSpeech,
   onToggleEnabled,
   onToggleMute,
   onChangeVolume,
 }: BgmPlayerEngineProps) {
   const copy = DOCK_COPY[lang] ?? DOCK_COPY.ja;
   const activeTrack = resolveSelectedBgmTrack(settings);
-  const effectiveVolume = settings.muted || isEmergencyDucking ? 0 : settings.volume;
+  const shouldDuck = isEmergencyDucking || isSpeechReading;
+  const effectiveVolume = settings.muted || shouldDuck ? 0 : settings.volume;
   const effectiveGain = effectiveVolume / 100;
 
   const [collapsed, setCollapsed] = useState(false);
@@ -567,8 +596,8 @@ export function BgmPlayerEngine({
     if (!el) return;
     el.loop = settings.loop;
     el.volume = Math.max(0, Math.min(1, effectiveGain));
-    el.muted = settings.muted || isEmergencyDucking;
-  }, [activeTrack.source, effectiveGain, isEmergencyDucking, settings.loop, settings.muted]);
+    el.muted = settings.muted || shouldDuck;
+  }, [activeTrack.source, effectiveGain, shouldDuck, settings.loop, settings.muted]);
 
   // Resume suspended Web Audio or HTML media automatically on next user gesture if blocked
   useEffect(() => {
@@ -787,7 +816,8 @@ export function BgmPlayerEngine({
       activeTrack.source === 'spotify' ||
       autoplayBlocked ||
       localFileMissing ||
-      localMediaError);
+      localMediaError ||
+      shouldDuck);
 
   const handleManualResume = () => {
     if (synthRef.current && synthRef.current.ctx.state === 'suspended') {
@@ -814,8 +844,11 @@ export function BgmPlayerEngine({
         })()
       : null;
 
-  const dockStatusLabel =
-    activeTrack.source === 'youtube'
+  const dockStatusLabel = shouldDuck
+    ? isSpeechReading
+      ? copy.duckedBySpeech
+      : copy.duckedByEew
+    : activeTrack.source === 'youtube'
       ? ytStatus === 'playing'
         ? copy.playing
         : ytStatus === 'buffering'
@@ -858,8 +891,14 @@ export function BgmPlayerEngine({
         <aside
           aria-label="BGM Player"
           data-testid="bgm-floating-dock"
+          data-emergency-ducking={String(shouldDuck)}
+          data-speech-reading={String(isSpeechReading)}
           data-yt-status={activeTrack.source === 'youtube' ? ytStatus : undefined}
-          className="fixed bottom-4 right-4 z-40 w-[336px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)]/95 shadow-2xl backdrop-blur-md transition-all"
+          className={`fixed bottom-4 right-4 z-40 w-[336px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-[var(--nein-surface)]/95 shadow-2xl backdrop-blur-md transition-all ${
+            shouldDuck
+              ? 'border-red-500/70 ring-1 ring-red-500/35'
+              : 'border-[var(--nein-border)]'
+          }`}
         >
           {/* Compact Top Bar */}
           <div className="flex items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] px-3 py-2">
@@ -946,7 +985,38 @@ export function BgmPlayerEngine({
           </div>
 
           {/* Body (stays mounted when collapsed so iframe audio keeps playing!) */}
-          <div className={collapsed ? 'h-0 overflow-hidden opacity-0 pointer-events-none' : 'p-2.5'}>
+          <div className={collapsed ? 'h-0 overflow-hidden opacity-0 pointer-events-none' : 'space-y-2 p-2.5'}>
+            {shouldDuck && (
+              <div
+                role="status"
+                data-testid="bgm-ducking-banner"
+                className="flex items-start justify-between gap-2 rounded-lg border border-red-500/45 bg-red-500/12 px-2.5 py-2 text-[11px] text-red-900 dark:text-red-100"
+              >
+                <div className="flex min-w-0 items-start gap-2">
+                  <Megaphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="truncate font-bold leading-snug">
+                      {isSpeechReading ? copy.duckedBySpeech : copy.duckedByEew}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug opacity-85">
+                      {speechStatusText || copy.bgmMutedForSpeech}
+                    </div>
+                  </div>
+                </div>
+                {isSpeechReading && onStopSpeech && (
+                  <button
+                    type="button"
+                    data-testid="bgm-dock-stop-speech-btn"
+                    onClick={onStopSpeech}
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-red-500/50 bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-red-500 cursor-pointer"
+                  >
+                    <Square className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
+                    <span>{copy.stopSpeech}</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {activeTrack.source === 'youtube' && (
               <div className="space-y-2">
                 <div className="overflow-hidden rounded-lg border border-[var(--nein-border-subtle)] bg-black">

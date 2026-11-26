@@ -36,7 +36,8 @@ import { VolcanoView } from './components/weather/VolcanoView';
 import { WeatherDashboard } from './components/weather/WeatherDashboard';
 import { useDisasterHub } from './hooks/useDisasterHub';
 import { useQuakeFeed } from './hooks/useQuakeFeed';
-import type { QuakeFilter } from './types/quake';
+import type { RegisteredRegion } from './types/disaster';
+import type { EEW556, QuakeFilter } from './types/quake';
 import {
   type AppLanguage,
   applyLanguageToDocument,
@@ -61,6 +62,23 @@ import {
   loadBgmSettings,
   saveBgmSettings,
 } from './utils/bgmManager';
+import {
+  type CurrentLocationContext,
+  type EewSpeechSettings,
+  analyzeLocalEewImpact,
+  buildEewSpeechScript,
+  getSpeechErrorMessage,
+  isSpeechSynthesisSupported,
+  loadEewSpeechSettings,
+  resolveCurrentLocationContext,
+  saveEewSpeechSettings,
+  speakDisasterAnnouncement,
+  stopDisasterAnnouncement,
+} from './utils/eewSpeech';
+import {
+  createRegionFromOffice,
+  findNearestWeatherOffice,
+} from './utils/regionWatchlist';
 
 export default function App() {
   const {
@@ -120,6 +138,13 @@ export default function App() {
   const [showStartupSplash, setShowStartupSplash] = useState(true);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
   const [bgmSettings, setBgmSettings] = useState<BgmSettings>(() => loadBgmSettings());
+  const [eewSpeechSettings, setEewSpeechSettings] = useState<EewSpeechSettings>(() =>
+    loadEewSpeechSettings(),
+  );
+  const [detectedLocation, setDetectedLocation] = useState<RegisteredRegion | null>(null);
+  const [isEewSpeaking, setIsEewSpeaking] = useState(false);
+  const [lastSpokenScript, setLastSpokenScript] = useState<string | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
   const mobileNavRef = useRef<HTMLDivElement | null>(null);
@@ -128,6 +153,14 @@ export default function App() {
   const ext = getExtendedMessages(lang);
 
   const hub = useDisasterHub(lang, records);
+  const speechSupported = isSpeechSynthesisSupported();
+  const currentLocation = resolveCurrentLocationContext(detectedLocation, hub.registeredRegions);
+  const activeEewImpact = activeEEW
+    ? analyzeLocalEewImpact(activeEEW, currentLocation, {
+        regionSnapshots: hub.regionSnapshots,
+        jmaTsunamis: hub.jmaTsunamis,
+      })
+    : null;
 
   useEffect(() => {
     applyThemeToDocument(themeSettings);
@@ -139,6 +172,10 @@ export default function App() {
   }, [bgmSettings]);
 
   useEffect(() => {
+    saveEewSpeechSettings(eewSpeechSettings);
+  }, [eewSpeechSettings]);
+
+  useEffect(() => {
     applyLanguageToDocument(lang);
     saveLanguage(lang);
   }, [lang]);
@@ -148,6 +185,86 @@ export default function App() {
       setShowStartupSplash(false);
     }
   }, [activeEEW, showStartupSplash]);
+
+  // Keep latest speech settings & hub context in a ref so activeEEW updates speak once per alert revision
+  const speechContextRef = useRef({
+    eewSpeechSettings,
+    currentLocation,
+    regionSnapshots: hub.regionSnapshots,
+    jmaTsunamis: hub.jmaTsunamis,
+    lang,
+    soundEnabled,
+  });
+  speechContextRef.current = {
+    eewSpeechSettings,
+    currentLocation,
+    regionSnapshots: hub.regionSnapshots,
+    jmaTsunamis: hub.jmaTsunamis,
+    lang,
+    soundEnabled,
+  };
+
+  const activeEewKey = activeEEW
+    ? `${activeEEW.id}:${activeEEW.code === 556 ? `${activeEEW.issue.serial}:${activeEEW.cancelled}` : activeEEW.type}`
+    : '';
+
+  useEffect(() => {
+    if (!activeEEW || !activeEewKey) {
+      stopDisasterAnnouncement();
+      setIsEewSpeaking(false);
+      setSpeechError(null);
+      return;
+    }
+
+    const ctx = speechContextRef.current;
+    const impact = analyzeLocalEewImpact(activeEEW, ctx.currentLocation, {
+      regionSnapshots: ctx.regionSnapshots,
+      jmaTsunamis: ctx.jmaTsunamis,
+    });
+    const script = buildEewSpeechScript(
+      activeEEW,
+      impact,
+      ctx.lang,
+      ctx.eewSpeechSettings.includePreparednessAdvice,
+    );
+    setLastSpokenScript(script);
+    setSpeechError(null);
+
+    if (!ctx.eewSpeechSettings.enabled || !isSpeechSynthesisSupported()) {
+      return;
+    }
+
+    // Slight delay when alert chime is enabled so voice readout starts cleanly right after the chime
+    const delayMs = ctx.soundEnabled ? 450 : 80;
+    const timer = window.setTimeout(() => {
+      speakDisasterAnnouncement(script, {
+        lang: ctx.lang,
+        rate: ctx.eewSpeechSettings.rate,
+        volume: ctx.eewSpeechSettings.volume,
+        onStart: () => {
+          setSpeechError(null);
+          setIsEewSpeaking(true);
+        },
+        onEnd: () => setIsEewSpeaking(false),
+        onError: (reason) => {
+          if (reason !== 'interrupted') {
+            setSpeechError(getSpeechErrorMessage(reason, ctx.lang));
+          }
+        },
+      });
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [activeEEW, activeEewKey]);
+
+  // Cancel any active voice readout on unmount
+  useEffect(() => {
+    return () => {
+      stopDisasterAnnouncement();
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileOpenGroup) return;
@@ -190,6 +307,116 @@ export default function App() {
 
   const handleResetTheme = () => {
     setThemeSettings(DEFAULT_THEME_SETTINGS);
+  };
+
+  const handleStopEewSpeech = () => {
+    stopDisasterAnnouncement();
+    setIsEewSpeaking(false);
+    setSpeechError(null);
+  };
+
+  const handleDismissEEW = () => {
+    handleStopEewSpeech();
+    dismissEEW();
+  };
+
+  const handleReplayActiveEewSpeech = () => {
+    if (!activeEEW || !activeEewImpact) return;
+    const script = buildEewSpeechScript(
+      activeEEW,
+      activeEewImpact,
+      lang,
+      eewSpeechSettings.includePreparednessAdvice,
+    );
+    setLastSpokenScript(script);
+    setSpeechError(null);
+    speakDisasterAnnouncement(script, {
+      lang,
+      rate: eewSpeechSettings.rate,
+      volume: eewSpeechSettings.volume,
+      onStart: () => {
+        setSpeechError(null);
+        setIsEewSpeaking(true);
+      },
+      onEnd: () => setIsEewSpeaking(false),
+      onError: (reason) => {
+        if (reason !== 'interrupted') {
+          setSpeechError(getSpeechErrorMessage(reason, lang));
+        }
+      },
+    });
+  };
+
+  const handleTestEewSpeech = () => {
+    const loc: CurrentLocationContext = currentLocation;
+    const nowStr = new Date().toISOString();
+    const sampleAlert: EEW556 = {
+      id: `speech-test-${Date.now()}`,
+      code: 556,
+      time: nowStr,
+      isTest: true,
+      cancelled: false,
+      issue: {
+        time: nowStr,
+        eventId: `speech-test-evt-${Date.now()}`,
+        serial: '1',
+      },
+      earthquake: {
+        originTime: nowStr,
+        arrivalTime: nowStr,
+        hypocenter: {
+          name: `${loc.prefectureName}近海`,
+          reduceName: loc.prefectureName,
+          latitude: Number((loc.lat - 0.18).toFixed(2)),
+          longitude: Number((loc.lon + 0.14).toFixed(2)),
+          depth: 30,
+          magnitude: 6.4,
+        },
+      },
+      areas: [
+        {
+          pref: loc.prefectureName,
+          name: loc.label,
+          scaleFrom: 45,
+          scaleTo: 50,
+          kindCode: '10',
+        },
+      ],
+    };
+
+    const impact = analyzeLocalEewImpact(sampleAlert, loc, {
+      regionSnapshots: hub.regionSnapshots,
+      jmaTsunamis: hub.jmaTsunamis,
+    });
+    const script = buildEewSpeechScript(
+      sampleAlert,
+      impact,
+      lang,
+      eewSpeechSettings.includePreparednessAdvice,
+    );
+    setLastSpokenScript(script);
+    setSpeechError(null);
+    speakDisasterAnnouncement(script, {
+      lang,
+      rate: eewSpeechSettings.rate,
+      volume: eewSpeechSettings.volume,
+      onStart: () => {
+        setSpeechError(null);
+        setIsEewSpeaking(true);
+      },
+      onEnd: () => setIsEewSpeaking(false),
+      onError: (reason) => {
+        if (reason !== 'interrupted') {
+          setSpeechError(getSpeechErrorMessage(reason, lang));
+        }
+      },
+    });
+  };
+
+  const handleDetectNearestRegion = (lat: number, lon: number) => {
+    const nearest = createRegionFromOffice(findNearestWeatherOffice(lat, lon));
+    setDetectedLocation(nearest);
+    hub.addNearestRegionByCoords(lat, lon);
   };
 
   const effectiveBgMotion = resolveEffectiveBackgroundMotion(
@@ -611,7 +838,7 @@ export default function App() {
             onAddRegion={hub.addRegisteredRegion}
             onRemoveRegion={hub.removeRegisteredRegion}
             onMoveRegion={hub.moveRegisteredRegion}
-            onDetectNearestRegion={(lat, lon) => hub.addNearestRegionByCoords(lat, lon)}
+            onDetectNearestRegion={handleDetectNearestRegion}
             onOpenWeatherForRegion={() => setActiveView('weather')}
             notificationPrefs={hub.notificationPrefs}
             onChangeNotificationPrefs={hub.setNotificationPrefs}
@@ -619,6 +846,14 @@ export default function App() {
             onClearNotificationHistory={hub.clearNotificationHistory}
             bgmSettings={bgmSettings}
             onChangeBgmSettings={setBgmSettings}
+            eewSpeechSettings={eewSpeechSettings}
+            onChangeEewSpeechSettings={setEewSpeechSettings}
+            currentLocation={currentLocation}
+            isEewSpeaking={isEewSpeaking}
+            lastSpokenScript={lastSpokenScript}
+            speechError={speechError}
+            onTestEewSpeech={handleTestEewSpeech}
+            onStopEewSpeech={handleStopEewSpeech}
           />
         ) : (
           <>
@@ -701,7 +936,19 @@ export default function App() {
         onNewAlertRecorded={hub.refreshNotificationHistory}
       />
 
-      <EEWWarningModal lang={lang} alert={activeEEW} onDismiss={dismissEEW} />
+      <EEWWarningModal
+        lang={lang}
+        alert={activeEEW}
+        onDismiss={handleDismissEEW}
+        localImpact={activeEewImpact}
+        isSpeaking={isEewSpeaking}
+        speechSupported={speechSupported}
+        bgmDucked={bgmSettings.enabled && (Boolean(activeEEW) || (isEewSpeaking && eewSpeechSettings.duckBgmDuringSpeech))}
+        spokenScript={lastSpokenScript}
+        speechError={speechError}
+        onReplaySpeech={handleReplayActiveEewSpeech}
+        onStopSpeech={handleStopEewSpeech}
+      />
 
       <TestDispatchModal
         lang={lang}
@@ -714,6 +961,13 @@ export default function App() {
         lang={lang}
         settings={bgmSettings}
         isEmergencyDucking={Boolean(activeEEW)}
+        isSpeechReading={isEewSpeaking && eewSpeechSettings.duckBgmDuringSpeech}
+        speechStatusText={
+          isEewSpeaking
+            ? `${currentLocation.label} — ${lastSpokenScript ?? ''}`
+            : null
+        }
+        onStopSpeech={handleStopEewSpeech}
         onToggleEnabled={() =>
           setBgmSettings((prev) => ({
             ...prev,
