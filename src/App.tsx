@@ -5,6 +5,7 @@
 
 import { AlertCircle, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { BackgroundMotionLayer } from './components/BackgroundMotionLayer';
 import { EEWWarningModal } from './components/EEWWarningModal';
 import {
   Header,
@@ -16,6 +17,7 @@ import {
 import { InAppToastContainer } from './components/InAppToastContainer';
 import { QuakeDetailPanel } from './components/QuakeDetailPanel';
 import { QuakeList } from './components/QuakeList';
+import { StartupSplashScreen } from './components/StartupSplashScreen';
 import { SystemSettingsPanel } from './components/SystemSettingsPanel';
 import { TestDispatchModal } from './components/TestDispatchModal';
 import { WorkspaceToolbar } from './components/WorkspaceToolbar';
@@ -43,11 +45,13 @@ import {
 } from './utils/i18n';
 import { getExtendedMessages } from './utils/i18nExtended';
 import {
+  type BackgroundMotionId,
   type ColorThemeId,
   DEFAULT_THEME_SETTINGS,
   type ThemeSettings,
   applyThemeToDocument,
   loadThemeSettings,
+  resolveEffectiveBackgroundMotion,
   saveThemeSettings,
 } from './utils/themeSettings';
 
@@ -106,6 +110,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<AppViewMode>('dashboard');
   const [mobileOpenGroup, setMobileOpenGroup] = useState<NavGroupId | null>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [showStartupSplash, setShowStartupSplash] = useState(true);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +130,12 @@ export default function App() {
     applyLanguageToDocument(lang);
     saveLanguage(lang);
   }, [lang]);
+
+  useEffect(() => {
+    if (activeEEW && showStartupSplash) {
+      setShowStartupSplash(false);
+    }
+  }, [activeEEW, showStartupSplash]);
 
   useEffect(() => {
     if (!mobileOpenGroup) return;
@@ -158,9 +169,21 @@ export default function App() {
     }));
   };
 
+  const handleSelectBackgroundMotion = (backgroundMotion: BackgroundMotionId) => {
+    setThemeSettings((prev) => ({
+      ...prev,
+      backgroundMotion,
+    }));
+  };
+
   const handleResetTheme = () => {
     setThemeSettings(DEFAULT_THEME_SETTINGS);
   };
+
+  const effectiveBgMotion = resolveEffectiveBackgroundMotion(
+    themeSettings.backgroundMotion,
+    themeSettings.mode,
+  );
 
   const handleSelectQuakeFilter = (nextFilter: QuakeFilter) => {
     setFilter(nextFilter);
@@ -194,8 +217,15 @@ export default function App() {
   return (
     <div
       id="top"
-      className="flex min-h-screen flex-col bg-[var(--nein-canvas)] text-slate-900 transition-colors dark:text-slate-100"
+      className={`relative flex min-h-screen flex-col text-slate-900 transition-colors dark:text-slate-100 ${
+        effectiveBgMotion === 'off' ? 'bg-[var(--nein-canvas)]' : 'bg-transparent'
+      }`}
     >
+      <BackgroundMotionLayer
+        motion={themeSettings.backgroundMotion}
+        themeMode={themeSettings.mode}
+      />
+
       <Header
         lang={lang}
         activeView={activeView}
@@ -350,7 +380,7 @@ export default function App() {
       </div>
 
       {(activeView === 'quake' || activeView === 'jma_quake') && (
-        <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)]">
+        <div className="relative z-10 border-b border-[var(--nein-border)] bg-[var(--nein-surface)]">
           <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
             <button
               type="button"
@@ -380,34 +410,36 @@ export default function App() {
       )}
 
       {activeView === 'quake' && (
-        <WorkspaceToolbar
-          lang={lang}
-          wsStatus={wsStatus}
-          autoUpdateEnabled={autoUpdateEnabled}
-          onToggleAutoUpdate={() => setAutoUpdateEnabled(!autoUpdateEnabled)}
-          pollIntervalSec={pollIntervalSec}
-          onChangePollInterval={setPollIntervalSec}
-          nextRefreshIn={nextRefreshIn}
-          lastUpdated={lastUpdated}
-          isRefreshing={isRefreshing}
-          onRefreshNow={() => void refreshNow()}
-          soundEnabled={soundEnabled}
-          onToggleSound={() => setSoundEnabled(!soundEnabled)}
-          notificationEnabled={notificationEnabled}
-          onToggleNotification={() => void toggleNotificationEnabled()}
-          notificationHint={notificationHint}
-          onDismissNotificationHint={dismissNotificationHint}
-          onQuickTestEEW={() => triggerTestEEW('kanto_alert')}
-          hasTestRecords={hasTestRecords}
-          onClearTestRecords={clearTestRecords}
-          archiveDate={archiveDate}
-          onExitArchiveMode={exitArchiveMode}
-        />
+        <div className="relative z-10">
+          <WorkspaceToolbar
+            lang={lang}
+            wsStatus={wsStatus}
+            autoUpdateEnabled={autoUpdateEnabled}
+            onToggleAutoUpdate={() => setAutoUpdateEnabled(!autoUpdateEnabled)}
+            pollIntervalSec={pollIntervalSec}
+            onChangePollInterval={setPollIntervalSec}
+            nextRefreshIn={nextRefreshIn}
+            lastUpdated={lastUpdated}
+            isRefreshing={isRefreshing}
+            onRefreshNow={() => void refreshNow()}
+            soundEnabled={soundEnabled}
+            onToggleSound={() => setSoundEnabled(!soundEnabled)}
+            notificationEnabled={notificationEnabled}
+            onToggleNotification={() => void toggleNotificationEnabled()}
+            notificationHint={notificationHint}
+            onDismissNotificationHint={dismissNotificationHint}
+            onQuickTestEEW={() => triggerTestEEW('kanto_alert')}
+            hasTestRecords={hasTestRecords}
+            onClearTestRecords={clearTestRecords}
+            archiveDate={archiveDate}
+            onExitArchiveMode={exitArchiveMode}
+          />
+        </div>
       )}
 
       <main
         key={activeView}
-        className="nein-view-stage mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6"
+        className="nein-view-stage relative z-10 mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6"
       >
         {activeView === 'dashboard' ? (
           <ComprehensiveDashboard
@@ -549,6 +581,8 @@ export default function App() {
             onToggleThemeMode={handleToggleThemeMode}
             colorTheme={themeSettings.colorTheme}
             onSelectColorTheme={handleSelectColorTheme}
+            backgroundMotion={themeSettings.backgroundMotion}
+            onSelectBackgroundMotion={handleSelectBackgroundMotion}
             onResetTheme={handleResetTheme}
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
@@ -639,7 +673,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-[var(--nein-border)] bg-[var(--nein-header)] py-4 text-xs text-slate-600 transition-colors dark:text-slate-500">
+      <footer className="relative z-10 border-t border-[var(--nein-border)] bg-[var(--nein-header)] py-4 text-xs text-slate-600 transition-colors dark:text-slate-500">
         <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-2 px-4 sm:flex-row sm:items-center sm:px-6">
           <span>{m.footer.brandLine}</span>
           <span>{m.footer.sourceLine}</span>
@@ -659,6 +693,13 @@ export default function App() {
         onClose={() => setIsTestModalOpen(false)}
         onDispatch={triggerTestEEW}
       />
+
+      {showStartupSplash && !activeEEW && (
+        <StartupSplashScreen
+          lang={lang}
+          onComplete={() => setShowStartupSplash(false)}
+        />
+      )}
     </div>
   );
 }

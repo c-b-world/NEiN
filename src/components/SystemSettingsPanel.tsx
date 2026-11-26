@@ -1,17 +1,24 @@
 import {
   ArrowDown,
   ArrowUp,
+  Ban,
   Bell,
   BellOff,
   Check,
+  CloudSun,
+  Flower2,
   Globe,
+  Leaf,
   LocateFixed,
+  Lock,
   MapPin,
   Moon,
   Palette,
   Plus,
   RefreshCw,
   RotateCcw,
+  Snowflake,
+  Sparkles,
   Sun,
   Trash2,
   Volume2,
@@ -33,11 +40,86 @@ import {
 import { getExtendedMessages } from '../utils/i18nExtended';
 import { playChimeWithVolume } from '../utils/notificationCenter';
 import {
+  BACKGROUND_MOTION_OPTIONS,
+  type BackgroundMotionId,
   COLOR_THEME_OPTIONS,
   type ColorThemeId,
   type ThemeMode,
+  resolveEffectiveBackgroundMotion,
 } from '../utils/themeSettings';
 import { formatJstTimestamp } from '../utils/weatherParser';
+
+const BG_MOTION_COPY: Record<
+  AppLanguage,
+  {
+    title: string;
+    current: string;
+    desc: string;
+    darkOnlyBadge: string;
+    darkModeHint: string;
+    pausedInLight: string;
+    darkPreview: string;
+    lightPreview: string;
+  }
+> = {
+  ja: {
+    title: '背景モーション（季節・宇宙）',
+    current: '現在:',
+    desc: '季節の情景や宇宙の星を背景に表示します。ダーク・ライトモードで見え方が変化し、画面下部に各テーマの風景（公園・海・紅葉の山・雪景色）が描かれます。',
+    darkOnlyBadge: 'ダークモード限定',
+    darkModeHint: 'ダークモード時のみ選択可能',
+    pausedInLight: '「宇宙（星）」はダークモード限定のため、ライトモード中は一時的にOFFになっています。',
+    darkPreview: 'ダーク',
+    lightPreview: 'ライト',
+  },
+  en: {
+    title: 'Background Motion (Seasons & Space)',
+    current: 'Current:',
+    desc: 'Display subtle animated scenery behind the workspace. Visual tones adapt to Dark/Light mode with grounded horizon scenery (park, sea, autumn mountains, snow).',
+    darkOnlyBadge: 'Dark Mode Only',
+    darkModeHint: 'Available in Dark Mode only',
+    pausedInLight: 'Space (Stars) is Dark Mode only and is temporarily paused while Light Mode is active.',
+    darkPreview: 'Dark',
+    lightPreview: 'Light',
+  },
+  zh: {
+    title: '背景动态效果（四季・宇宙）',
+    current: '当前：',
+    desc: '在背景中显示细腻的四季景色或星空动态。深色与浅色模式呈现不同氛围，画面底部带有公园、海面、红叶山峦、雪地等地景。',
+    darkOnlyBadge: '仅限深色模式',
+    darkModeHint: '仅深色模式可选',
+    pausedInLight: '「宇宙（星空）」仅限深色模式，浅色模式下已暂时关闭。',
+    darkPreview: '深色',
+    lightPreview: '浅色',
+  },
+  ko: {
+    title: '배경 모션 (계절・우주)',
+    current: '현재:',
+    desc: '배경에 계절 풍경과 별빛 모션을 표시합니다. 다크・라이트 모드에 따라 분위기가 달라지며 하단에 공원・바다・단풍산・설경 지면이 표현됩니다.',
+    darkOnlyBadge: '다크 모드 전용',
+    darkModeHint: '다크 모드에서만 선택 가능',
+    pausedInLight: '「우주 (별빛)」은 다크 모드 전용으로, 라이트 모드에서는 일시적으로 OFF 상태입니다.',
+    darkPreview: '다크',
+    lightPreview: '라이트',
+  },
+};
+
+function renderMotionIcon(id: BackgroundMotionId) {
+  switch (id) {
+    case 'spring':
+      return <Flower2 className="h-4 w-4 text-pink-500 dark:text-pink-300" aria-hidden="true" />;
+    case 'summer':
+      return <CloudSun className="h-4 w-4 text-sky-500 dark:text-sky-300" aria-hidden="true" />;
+    case 'autumn':
+      return <Leaf className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden="true" />;
+    case 'winter':
+      return <Snowflake className="h-4 w-4 text-blue-500 dark:text-sky-200" aria-hidden="true" />;
+    case 'space':
+      return <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-300" aria-hidden="true" />;
+    default:
+      return <Ban className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />;
+  }
+}
 
 interface SystemSettingsPanelProps {
   lang: AppLanguage;
@@ -46,6 +128,8 @@ interface SystemSettingsPanelProps {
   onToggleThemeMode: () => void;
   colorTheme: ColorThemeId;
   onSelectColorTheme: (id: ColorThemeId) => void;
+  backgroundMotion: BackgroundMotionId;
+  onSelectBackgroundMotion: (id: BackgroundMotionId) => void;
   onResetTheme: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
@@ -75,6 +159,8 @@ export function SystemSettingsPanel({
   onToggleThemeMode,
   colorTheme,
   onSelectColorTheme,
+  backgroundMotion,
+  onSelectBackgroundMotion,
   onResetTheme,
   soundEnabled,
   onToggleSound,
@@ -98,6 +184,7 @@ export function SystemSettingsPanel({
 }: SystemSettingsPanelProps) {
   const m = getMessages(lang);
   const ext = getExtendedMessages(lang);
+  const bgCopy = BG_MOTION_COPY[lang];
   const [selectedAddOffice, setSelectedAddOffice] = useState('130000');
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const isDark = themeMode === 'dark';
@@ -105,6 +192,11 @@ export function SystemSettingsPanel({
     COLOR_THEME_OPTIONS.find((opt) => opt.id === colorTheme) ?? COLOR_THEME_OPTIONS[0];
   const activeLangOption =
     LANGUAGE_OPTIONS.find((opt) => opt.id === lang) ?? LANGUAGE_OPTIONS[0];
+  const effectiveBackgroundMotion = resolveEffectiveBackgroundMotion(backgroundMotion, themeMode);
+  const activeMotionOption =
+    BACKGROUND_MOTION_OPTIONS.find((opt) => opt.id === effectiveBackgroundMotion) ??
+    BACKGROUND_MOTION_OPTIONS[0];
+  const isSpacePausedInLight = backgroundMotion === 'space' && !isDark;
 
   const handleRequestGeolocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -410,6 +502,140 @@ export function SystemSettingsPanel({
               </span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 3.5. Background Motion Selector (OFF / Spring / Summer / Autumn / Winter / Space [Dark Only]) */}
+      <div
+        data-testid="bg-motion-section"
+        className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3.5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {bgCopy.title}
+            </h2>
+          </div>
+          <span className="font-mono text-xs text-slate-600 dark:text-slate-400">
+            {bgCopy.current}{' '}
+            <strong
+              data-testid="bg-motion-active-label"
+              className="text-[var(--nein-accent-text)]"
+            >
+              {activeMotionOption.label[lang]}
+            </strong>
+          </span>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">{bgCopy.desc}</p>
+
+        {isSpacePausedInLight && (
+          <div
+            role="status"
+            data-testid="bg-motion-space-paused-notice"
+            className="mt-3 flex items-center gap-2 rounded-md border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+          >
+            <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{bgCopy.pausedInLight}</span>
+          </div>
+        )}
+
+        <div
+          role="radiogroup"
+          aria-label={bgCopy.title}
+          data-testid="bg-motion-selector-group"
+          className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {BACKGROUND_MOTION_OPTIONS.map((opt) => {
+            const isLocked = Boolean(opt.darkOnly) && !isDark;
+            const isSelected = effectiveBackgroundMotion === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                aria-disabled={isLocked}
+                disabled={isLocked}
+                data-testid={`bg-motion-btn-${opt.id}`}
+                onClick={() => {
+                  if (!isLocked) {
+                    onSelectBackgroundMotion(opt.id);
+                  }
+                }}
+                className={`flex flex-col justify-between rounded-lg border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
+                  isLocked
+                    ? 'cursor-not-allowed border-[var(--nein-border)] bg-[var(--nein-sub)] opacity-55'
+                    : isSelected
+                      ? 'cursor-pointer border-[var(--nein-accent)] bg-[var(--nein-accent-soft)]'
+                      : 'cursor-pointer border-[var(--nein-border)] bg-[var(--nein-sub)] hover:border-slate-400 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  {/* Scenic Dark / Light Mini Preview */}
+                  <div
+                    aria-hidden="true"
+                    className="flex h-7 overflow-hidden rounded border border-slate-300 dark:border-slate-700"
+                  >
+                    <div
+                      className="flex w-9 items-center justify-center"
+                      style={{ background: opt.darkPreviewGradient }}
+                      title={bgCopy.darkPreview}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full ring-1 ring-white/50"
+                        style={{ backgroundColor: opt.accentDot }}
+                      />
+                    </div>
+                    {!opt.darkOnly && (
+                      <div
+                        className="flex w-9 items-center justify-center border-l border-slate-300 dark:border-slate-700"
+                        style={{ background: opt.lightPreviewGradient }}
+                        title={bgCopy.lightPreview}
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full ring-1 ring-slate-900/20"
+                          style={{ backgroundColor: opt.accentDot }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {isLocked ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-slate-400/50 bg-slate-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                      <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                      {bgCopy.darkOnlyBadge}
+                    </span>
+                  ) : isSelected ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-[var(--nein-accent)] px-2 py-0.5 text-[11px] font-bold text-[var(--nein-accent-contrast)]">
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                      {m.settings.colorApplied}
+                    </span>
+                  ) : opt.darkOnly ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-violet-400/40 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-200">
+                      <Moon className="h-2.5 w-2.5" aria-hidden="true" />
+                      {bgCopy.darkOnlyBadge}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      {m.settings.colorSelect}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-3">
+                  <div className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {renderMotionIcon(opt.id)}
+                    <span>{opt.label[lang]}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                    {isLocked ? bgCopy.darkModeHint : opt.description[lang]}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
