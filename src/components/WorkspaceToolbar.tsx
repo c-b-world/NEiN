@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import type { WsStatus } from '../hooks/useQuakeFeed';
 import { formatDisplayYmd } from '../utils/archiveApi';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 
 interface WorkspaceToolbarProps {
+  lang: AppLanguage;
   wsStatus: WsStatus;
   autoUpdateEnabled: boolean;
   onToggleAutoUpdate: () => void;
@@ -45,6 +47,7 @@ function formatClockTime(date: Date | null): string {
 }
 
 export function WorkspaceToolbar({
+  lang,
   wsStatus,
   autoUpdateEnabled,
   onToggleAutoUpdate,
@@ -66,14 +69,16 @@ export function WorkspaceToolbar({
   archiveDate,
   onExitArchiveMode,
 }: WorkspaceToolbarProps) {
+  const m = getMessages(lang);
+
   const wsLabel =
     wsStatus === 'connected'
-      ? 'リアルタイム受信中'
+      ? m.toolbar.wsConnected
       : wsStatus === 'connecting'
-      ? 'リアルタイム接続中'
+      ? m.toolbar.wsConnecting
       : wsStatus === 'reconnecting'
-      ? '再接続中'
-      : 'ポーリング待機';
+      ? m.toolbar.wsReconnecting
+      : m.toolbar.wsOffline;
 
   const wsTone =
     wsStatus === 'connected'
@@ -84,7 +89,7 @@ export function WorkspaceToolbar({
 
   return (
     <section
-      aria-label="リアルタイム更新設定"
+      aria-label={m.settings.opsTitle}
       className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] transition-colors"
     >
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
@@ -111,7 +116,7 @@ export function WorkspaceToolbar({
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 font-mono text-[var(--nein-accent-text)] tabular-nums">
                 <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                アーカイブ: {formatDisplayYmd(archiveDate)}
+                {m.toolbar.archiveLabel}: {formatDisplayYmd(archiveDate)}
               </span>
               <button
                 type="button"
@@ -119,13 +124,13 @@ export function WorkspaceToolbar({
                 className="inline-flex items-center gap-1 rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--nein-accent-text)] hover:opacity-85 cursor-pointer"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                <span>最新に戻る</span>
+                <span>{m.toolbar.backToLatest}</span>
               </button>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-mono tabular-nums">
-                <span>最終更新</span>
+                <span>{m.toolbar.lastUpdated}</span>
                 <span className="text-slate-900 dark:text-slate-200 font-medium">
                   {formatClockTime(lastUpdated)}
                 </span>
@@ -137,7 +142,10 @@ export function WorkspaceToolbar({
                     /
                   </span>
                   <span className="text-slate-600 dark:text-slate-400 font-mono tabular-nums hidden sm:inline">
-                    次回自動取得 <strong className="text-[var(--nein-accent-text)] font-semibold">{nextRefreshIn}s</strong>
+                    {m.toolbar.nextAutoFetch}{' '}
+                    <strong className="text-[var(--nein-accent-text)] font-semibold">
+                      {nextRefreshIn}s
+                    </strong>
                   </span>
                 </>
               )}
@@ -152,7 +160,7 @@ export function WorkspaceToolbar({
             className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/20 dark:text-red-200 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
           >
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>即時テスト発報</span>
+            <span>{m.toolbar.quickTestEew}</span>
           </button>
 
           {hasTestRecords && (
@@ -162,7 +170,7 @@ export function WorkspaceToolbar({
               className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>テスト消去</span>
+              <span>{m.toolbar.clearTests}</span>
             </button>
           )}
 
@@ -182,11 +190,11 @@ export function WorkspaceToolbar({
               ) : (
                 <Play className="h-3 w-3" aria-hidden="true" />
               )}
-              <span>{autoUpdateEnabled ? '自動更新 ON' : '自動更新 OFF'}</span>
+              <span>{autoUpdateEnabled ? m.toolbar.autoOn : m.toolbar.autoOff}</span>
             </button>
 
             <label htmlFor="poll-interval-select" className="sr-only">
-              自動更新間隔
+              {m.settings.pollingTitle}
             </label>
             <select
               id="poll-interval-select"
@@ -196,13 +204,13 @@ export function WorkspaceToolbar({
               className="bg-transparent px-2 py-1 text-xs font-mono tabular-nums text-slate-800 dark:text-slate-300 focus:outline-none disabled:opacity-40 cursor-pointer"
             >
               <option value={10} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-                10秒
+                10{m.toolbar.intervalUnitSec}
               </option>
               <option value={30} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-                30秒
+                30{m.toolbar.intervalUnitSec}
               </option>
               <option value={60} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-                60秒
+                60{m.toolbar.intervalUnitSec}
               </option>
             </select>
           </div>
@@ -211,7 +219,7 @@ export function WorkspaceToolbar({
             type="button"
             onClick={onToggleSound}
             aria-pressed={soundEnabled}
-            aria-label={soundEnabled ? '緊急地震速報の警報音をオフにする' : '緊急地震速報の警報音をオンにする'}
+            aria-label={m.settings.soundTitle}
             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
               soundEnabled
                 ? 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-800 hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-800'
@@ -223,7 +231,9 @@ export function WorkspaceToolbar({
             ) : (
               <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">{soundEnabled ? '警報音 ON' : '警報音 OFF'}</span>
+            <span className="hidden sm:inline">
+              {soundEnabled ? m.toolbar.soundOn : m.toolbar.soundOff}
+            </span>
           </button>
 
           <button
@@ -232,11 +242,7 @@ export function WorkspaceToolbar({
             aria-checked={notificationEnabled}
             data-testid="eew-notification-switch"
             onClick={onToggleNotification}
-            aria-label={
-              notificationEnabled
-                ? '緊急地震速報のブラウザプッシュ通知をオフにする'
-                : '緊急地震速報のブラウザプッシュ通知をオンにする'
-            }
+            aria-label={m.settings.pushTitle}
             className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
               notificationEnabled
                 ? 'border-emerald-600/40 bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-200'
@@ -248,7 +254,7 @@ export function WorkspaceToolbar({
             ) : (
               <BellOff className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
             )}
-            <span>{notificationEnabled ? '通知 ON' : '通知 OFF'}</span>
+            <span>{notificationEnabled ? m.toolbar.notifyOn : m.toolbar.notifyOff}</span>
             <span
               aria-hidden="true"
               className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
@@ -273,7 +279,7 @@ export function WorkspaceToolbar({
               className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
-            <span>{isRefreshing ? '更新中...' : '今すぐ更新'}</span>
+            <span>{isRefreshing ? m.toolbar.refreshing : m.toolbar.refreshNow}</span>
           </button>
         </div>
       </div>
@@ -289,7 +295,7 @@ export function WorkspaceToolbar({
             <button
               type="button"
               onClick={onDismissNotificationHint}
-              aria-label="通知設定の案内を閉じる"
+              aria-label={m.eewModal.closeBtn}
               className="rounded p-0.5 text-amber-800 hover:text-amber-950 dark:text-amber-300/80 dark:hover:text-amber-100 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />

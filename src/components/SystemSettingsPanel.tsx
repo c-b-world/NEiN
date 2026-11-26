@@ -2,6 +2,7 @@ import {
   Bell,
   BellOff,
   Check,
+  Globe,
   Moon,
   Palette,
   RefreshCw,
@@ -11,12 +12,19 @@ import {
   VolumeX,
 } from 'lucide-react';
 import {
+  type AppLanguage,
+  LANGUAGE_OPTIONS,
+  getMessages,
+} from '../utils/i18n';
+import {
   COLOR_THEME_OPTIONS,
   type ColorThemeId,
   type ThemeMode,
 } from '../utils/themeSettings';
 
 interface SystemSettingsPanelProps {
+  lang: AppLanguage;
+  onChangeLang: (lang: AppLanguage) => void;
   themeMode: ThemeMode;
   onToggleThemeMode: () => void;
   colorTheme: ColorThemeId;
@@ -34,6 +42,8 @@ interface SystemSettingsPanelProps {
 }
 
 export function SystemSettingsPanel({
+  lang,
+  onChangeLang,
   themeMode,
   onToggleThemeMode,
   colorTheme,
@@ -49,13 +59,16 @@ export function SystemSettingsPanel({
   pollIntervalSec,
   onChangePollInterval,
 }: SystemSettingsPanelProps) {
+  const m = getMessages(lang);
   const isDark = themeMode === 'dark';
   const activeThemeOption =
     COLOR_THEME_OPTIONS.find((opt) => opt.id === colorTheme) ?? COLOR_THEME_OPTIONS[0];
+  const activeLangOption =
+    LANGUAGE_OPTIONS.find((opt) => opt.id === lang) ?? LANGUAGE_OPTIONS[0];
 
   return (
     <section
-      aria-label="システム設定"
+      aria-label={m.settings.title}
       data-testid="system-settings-panel"
       className="mx-auto flex w-full max-w-4xl flex-col gap-5"
     >
@@ -63,10 +76,10 @@ export function SystemSettingsPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
-            システム設定
+            {m.settings.title}
           </h1>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            表示モード（ダーク／ライト）、カラーテーマ、通知およびデータ取得動作を設定できます。設定は自動で保存されます。
+            {m.settings.subtitle}
           </p>
         </div>
 
@@ -77,11 +90,79 @@ export function SystemSettingsPanel({
           className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3.5 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
         >
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>外観を初期設定に戻す</span>
+          <span>{m.settings.resetAppearance}</span>
         </button>
       </div>
 
-      {/* 1. Appearance Mode: Dark / Light ON/OFF Toggle */}
+      {/* 1. International Language Switcher */}
+      <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3.5">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {m.settings.languageTitle}
+            </h2>
+          </div>
+          <span className="font-mono text-xs text-slate-600 dark:text-slate-400">
+            {m.settings.languageCurrent}{' '}
+            <strong className="text-[var(--nein-accent-text)]">
+              {activeLangOption.nativeName}
+            </strong>
+          </span>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
+          {m.settings.languageDesc}
+        </p>
+
+        <div
+          role="radiogroup"
+          aria-label={m.settings.languageTitle}
+          data-testid="language-selector-group"
+          className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          {LANGUAGE_OPTIONS.map((opt) => {
+            const isSelected = opt.id === lang;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                data-testid={`lang-btn-${opt.id}`}
+                onClick={() => onChangeLang(opt.id)}
+                className={`flex flex-col justify-between rounded-lg border p-3.5 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)] ${
+                  isSelected
+                    ? 'border-[var(--nein-accent)] bg-[var(--nein-accent-soft)]'
+                    : 'border-[var(--nein-border)] bg-[var(--nein-sub)] hover:border-slate-400 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-slate-700 dark:text-slate-300">
+                    {opt.codeLabel}
+                  </span>
+                  {isSelected && (
+                    <span className="inline-flex items-center gap-1 rounded bg-[var(--nein-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--nein-accent-contrast)]">
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                      {m.settings.colorApplied}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {opt.nativeName}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                    {opt.subLabel}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 2. Appearance Mode: Dark / Light ON/OFF Toggle */}
       <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -94,10 +175,10 @@ export function SystemSettingsPanel({
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                外観モード（ダーク／ライト切り替え）
+                {m.settings.modeTitle}
               </h2>
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                ON で夜間や常時監視に適したダークモード、OFF で昼間の視認性に優れたライトモードに切り替わります。
+                {m.settings.modeDesc}
               </p>
             </div>
           </div>
@@ -108,7 +189,7 @@ export function SystemSettingsPanel({
             aria-checked={isDark}
             data-testid="theme-mode-switch"
             onClick={onToggleThemeMode}
-            aria-label={isDark ? 'ダークモードをOFF（ライトモード）にする' : 'ダークモードをONにする'}
+            aria-label={m.settings.modeTitle}
             className="inline-flex min-h-[42px] items-center justify-between gap-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] px-4 py-2 text-xs font-semibold text-slate-900 transition-colors hover:border-[var(--nein-accent-border)] dark:text-slate-100 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nein-accent)]"
           >
             <span className="flex items-center gap-2">
@@ -117,7 +198,7 @@ export function SystemSettingsPanel({
               ) : (
                 <Sun className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
               )}
-              <span>{isDark ? 'ダークモード ON' : 'ダークモード OFF（ライト）'}</span>
+              <span>{isDark ? m.settings.modeOnLabel : m.settings.modeOffLabel}</span>
             </span>
 
             <span
@@ -136,27 +217,28 @@ export function SystemSettingsPanel({
         </div>
       </div>
 
-      {/* 2. Dual-Mode Color Theme Button Selector */}
+      {/* 3. Dual-Mode Color Theme Button Selector */}
       <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3.5">
           <div className="flex items-center gap-2">
             <Palette className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              カラーテーマ選択（ダーク・ライト両対応）
+              {m.settings.colorTitle}
             </h2>
           </div>
           <span className="font-mono text-xs text-slate-600 dark:text-slate-400">
-            選択中: <strong className="text-[var(--nein-accent-text)]">{activeThemeOption.name}</strong>
+            {m.settings.colorCurrent}{' '}
+            <strong className="text-[var(--nein-accent-text)]">{activeThemeOption.name}</strong>
           </span>
         </div>
 
         <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
-          ボタンをクリックして全体のアクセントカラーおよび背景トーンを切り替えます。各テーマはダークモード・ライトモードのどちらでも高い視認性を保つように調整されています。
+          {m.settings.colorDesc}
         </p>
 
         <div
           role="radiogroup"
-          aria-label="カラーテーマ一覧"
+          aria-label={m.settings.colorTitle}
           className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {COLOR_THEME_OPTIONS.map((option) => {
@@ -185,7 +267,6 @@ export function SystemSettingsPanel({
                     <div
                       className="flex w-8 items-center justify-center"
                       style={{ backgroundColor: option.darkCanvas }}
-                      title="ダーク時の配色"
                     >
                       <span
                         className="h-3 w-3 rounded-full"
@@ -195,7 +276,6 @@ export function SystemSettingsPanel({
                     <div
                       className="flex w-8 items-center justify-center border-l border-slate-300 dark:border-slate-700"
                       style={{ backgroundColor: option.lightCanvas }}
-                      title="ライト時の配色"
                     >
                       <span
                         className="h-3 w-3 rounded-full"
@@ -213,11 +293,11 @@ export function SystemSettingsPanel({
                       }}
                     >
                       <Check className="h-3 w-3" aria-hidden="true" />
-                      適用中
+                      {m.settings.colorApplied}
                     </span>
                   ) : (
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      選択
+                      {m.settings.colorSelect}
                     </span>
                   )}
                 </div>
@@ -240,35 +320,35 @@ export function SystemSettingsPanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                現在の配色プレビュー（{isDark ? 'ダーク' : 'ライト'} × {activeThemeOption.name}）
+                {m.settings.previewLabel}（{isDark ? m.settings.previewModeDark : m.settings.previewModeLight} × {activeThemeOption.name}）
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <span className="font-mono tabular-nums text-[var(--nein-accent-text)] font-semibold">
-                  最大震度 4
+                  {lang === 'en' ? 'Intensity 4' : lang === 'ko' ? '진도 4' : '震度 4'}
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="font-mono tabular-nums">M5.2</span>
                 <span aria-hidden="true">·</span>
-                <span>東京湾 / 深さ 約40km</span>
+                <span>{m.settings.previewSampleQuake}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="rounded-md border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--nein-accent-text)]">
-                選択タブ状態
+                {m.settings.previewTabState}
               </span>
               <span className="rounded-md bg-[var(--nein-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--nein-accent-contrast)]">
-                アクションボタン
+                {m.settings.previewActionBtn}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. Operational Settings (Notifications, Sound, Polling) */}
+      {/* 4. Operational Settings (Notifications, Sound, Polling) */}
       <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
         <h2 className="border-b border-[var(--nein-border-subtle)] pb-3 text-sm font-bold text-slate-900 dark:text-slate-100">
-          通知・警報音・データ更新設定
+          {m.settings.opsTitle}
         </h2>
 
         <div className="mt-3 divide-y divide-[var(--nein-border-subtle)]">
@@ -276,10 +356,10 @@ export function SystemSettingsPanel({
           <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                緊急地震速報 ブラウザプッシュ通知
+                {m.settings.pushTitle}
               </div>
               <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                緊急地震速報（発表検出・警報・取消）の受信時にデスクトップ／ブラウザ通知を送信します。
+                {m.settings.pushDesc}
               </p>
               {notificationHint && (
                 <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
@@ -304,7 +384,7 @@ export function SystemSettingsPanel({
               ) : (
                 <BellOff className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
               )}
-              <span>{notificationEnabled ? '通知 ON' : '通知 OFF'}</span>
+              <span>{notificationEnabled ? m.toolbar.notifyOn : m.toolbar.notifyOff}</span>
             </button>
           </div>
 
@@ -312,10 +392,10 @@ export function SystemSettingsPanel({
           <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                緊急地震速報 警報音
+                {m.settings.soundTitle}
               </div>
               <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                速報発報時のWeb Audioチャイム再生を切り替えます。
+                {m.settings.soundDesc}
               </p>
             </div>
 
@@ -335,7 +415,7 @@ export function SystemSettingsPanel({
               ) : (
                 <VolumeX className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
               )}
-              <span>{soundEnabled ? '警報音 ON' : '警報音 OFF'}</span>
+              <span>{soundEnabled ? m.toolbar.soundOn : m.toolbar.soundOff}</span>
             </button>
           </div>
 
@@ -343,10 +423,10 @@ export function SystemSettingsPanel({
           <div className="flex flex-col gap-3 pt-3.5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                地震情報 自動更新ポーリング
+                {m.settings.pollingTitle}
               </div>
               <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                WebSocketに加えて定期的に最新地震情報を自動取得します。
+                {m.settings.pollingDesc}
               </p>
             </div>
 
@@ -363,11 +443,11 @@ export function SystemSettingsPanel({
                 }`}
               >
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{autoUpdateEnabled ? '自動更新 ON' : '自動更新 OFF'}</span>
+                <span>{autoUpdateEnabled ? m.toolbar.autoOn : m.toolbar.autoOff}</span>
               </button>
 
               <label htmlFor="settings-poll-interval" className="sr-only">
-                更新間隔
+                {m.settings.pollingTitle}
               </label>
               <select
                 id="settings-poll-interval"
@@ -376,9 +456,9 @@ export function SystemSettingsPanel({
                 onChange={(e) => onChangePollInterval(Number(e.target.value))}
                 className="rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-2.5 py-1.5 font-mono text-xs tabular-nums text-slate-900 dark:text-slate-100 disabled:opacity-45 cursor-pointer"
               >
-                <option value={10}>10秒</option>
-                <option value={30}>30秒</option>
-                <option value={60}>60秒</option>
+                <option value={10}>10{m.toolbar.intervalUnitSec}</option>
+                <option value={30}>30{m.toolbar.intervalUnitSec}</option>
+                <option value={60}>60{m.toolbar.intervalUnitSec}</option>
               </select>
             </div>
           </div>

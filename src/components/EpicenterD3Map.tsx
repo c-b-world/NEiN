@@ -18,6 +18,7 @@ import {
   getJapanAndNeighborFeatures,
   getNearbyCities,
 } from '../utils/d3MapUtils';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import { getRecordCoordinates, getRecordTitle } from '../utils/quakeParser';
 import {
   type ColorThemeId,
@@ -26,6 +27,7 @@ import {
 } from '../utils/themeSettings';
 
 interface EpicenterD3MapProps {
+  lang: AppLanguage;
   records: P2PQuakeRecord[];
   selectedRecord: P2PQuakeRecord | null;
   onSelectRecord: (id: string) => void;
@@ -47,12 +49,14 @@ const MAJOR_HUB_NAMES = new Set([
 ]);
 
 export function EpicenterD3Map({
+  lang,
   records,
   selectedRecord,
   onSelectRecord,
   themeMode,
   colorTheme,
 }: EpicenterD3MapProps) {
+  const m = getMessages(lang);
   const [viewMode, setViewMode] = useState<MapViewMode>('vicinity');
   const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
 
@@ -258,7 +262,7 @@ export function EpicenterD3Map({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] px-3.5 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
-            震源地図
+            {m.detail.mapTitle}
           </span>
           <span className="font-mono text-[11px] tabular-nums text-slate-500">
             {transform.k.toFixed(1)}x
@@ -268,7 +272,7 @@ export function EpicenterD3Map({
         <div className="flex items-center gap-2">
           <div
             role="group"
-            aria-label="地図表示範囲"
+            aria-label={m.detail.mapTitle}
             className="flex items-center rounded border border-[var(--nein-border)] bg-[var(--nein-sub)] p-0.5"
           >
             <button
@@ -282,7 +286,7 @@ export function EpicenterD3Map({
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
-              震源周辺
+              {m.detail.mapVicinity}
             </button>
             <button
               type="button"
@@ -294,19 +298,19 @@ export function EpicenterD3Map({
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
-              全国
+              {m.detail.mapNational}
             </button>
           </div>
 
           <div
             role="group"
-            aria-label="地図ズーム操作"
+            aria-label="Map Zoom"
             className="flex items-center rounded border border-[var(--nein-border)] bg-[var(--nein-sub)]"
           >
             <button
               type="button"
               onClick={() => handleZoomBy(1.5)}
-              aria-label="地図を拡大"
+              aria-label="Zoom In"
               className="p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -314,7 +318,7 @@ export function EpicenterD3Map({
             <button
               type="button"
               onClick={() => handleZoomBy(1 / 1.5)}
-              aria-label="地図を縮小"
+              aria-label="Zoom Out"
               className="border-x border-[var(--nein-border)] p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <Minus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -322,7 +326,7 @@ export function EpicenterD3Map({
             <button
               type="button"
               onClick={handleResetZoom}
-              aria-label="地図の表示位置をリセット"
+              aria-label="Reset Zoom"
               className="p-1 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -338,7 +342,7 @@ export function EpicenterD3Map({
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           className="h-full w-full cursor-grab active:cursor-grabbing select-none"
           role="img"
-          aria-label="D3.jsによる震源地周辺マップ"
+          aria-label={m.detail.mapTitle}
         >
           <g transform={transform.toString()}>
             {/* Graticule */}
@@ -422,7 +426,7 @@ export function EpicenterD3Map({
                     onSelectRecord(record.id);
                   }}
                 >
-                  <title>{getRecordTitle(record)}</title>
+                  <title>{getRecordTitle(record, lang)}</title>
                 </circle>
               );
             })}
@@ -483,7 +487,7 @@ export function EpicenterD3Map({
 
         {!selectedCoords && (
           <div className="pointer-events-none absolute bottom-3 left-3 rounded border border-[var(--nein-border)] bg-[var(--nein-surface)]/95 px-2.5 py-1 text-[11px] text-slate-700 dark:text-slate-300">
-            震源座標なし（日本全国を表示中）
+            {m.detail.mapNoCoordsOverlay}
           </div>
         )}
       </div>
@@ -492,13 +496,13 @@ export function EpicenterD3Map({
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3.5 py-2 text-[11px] text-slate-600 dark:text-slate-400">
         <span className="font-mono tabular-nums text-slate-800 dark:text-slate-300">
           {selectedCoords
-            ? `北緯 ${selectedCoords.latitude.toFixed(1)}° / 東経 ${selectedCoords.longitude.toFixed(1)}°`
-            : '座標データなし'}
+            ? `${m.detail.mapLatPrefix} ${selectedCoords.latitude.toFixed(1)}° / ${m.detail.mapLonPrefix} ${selectedCoords.longitude.toFixed(1)}°`
+            : m.detail.mapNoCoordsFooter}
         </span>
 
         {nearbyCities.length > 0 && (
           <span className="font-mono tabular-nums text-slate-600 dark:text-slate-400 truncate">
-            近隣：
+            {m.detail.mapNearby}{' '}
             {nearbyCities
               .map((c) => `${c.name} ${c.distanceKm}km`)
               .join(' · ')}

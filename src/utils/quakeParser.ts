@@ -1,3 +1,4 @@
+import { formatP2PAreaLabel, resolveP2PAreaInfo } from '../data/p2pAreaCodes';
 import type {
   EEW556,
   EEWDetection554,
@@ -9,6 +10,7 @@ import type {
   ScalePresentation,
   TestEEWPreset,
 } from '../types/quake';
+import type { AppLanguage } from './i18n';
 
 export const HISTORY_PAGE_LIMIT = 100;
 export const INITIAL_HISTORY_PAGES = 3; // 300 records on initial load
@@ -47,12 +49,56 @@ export function normalizeP2PQuakeUrl(rawUrl: string): string {
   return url.toString();
 }
 
-export function getScalePresentation(scale: number): ScalePresentation {
+function localizeScaleText(scale: number, lang: AppLanguage): { short: string; label: string } {
+  const isEn = lang === 'en';
+  const isKo = lang === 'ko';
+  const prefix = isEn ? 'Intensity ' : isKo ? '진도 ' : '震度';
+  switch (scale) {
+    case 10:
+      return { short: '1', label: `${prefix}1` };
+    case 20:
+      return { short: '2', label: `${prefix}2` };
+    case 30:
+      return { short: '3', label: `${prefix}3` };
+    case 40:
+      return { short: '4', label: `${prefix}4` };
+    case 45:
+      return {
+        short: isEn ? '5-' : isKo ? '5약' : '5弱',
+        label: isEn ? 'Intensity 5-Lower' : isKo ? '진도 5약' : lang === 'zh' ? '震度5弱' : '震度5弱',
+      };
+    case 50:
+      return {
+        short: isEn ? '5+' : isKo ? '5강' : '5強',
+        label: isEn ? 'Intensity 5-Upper' : isKo ? '진도 5강' : lang === 'zh' ? '震度5强' : '震度5強',
+      };
+    case 55:
+      return {
+        short: isEn ? '6-' : isKo ? '6약' : '6弱',
+        label: isEn ? 'Intensity 6-Lower' : isKo ? '진도 6약' : lang === 'zh' ? '震度6弱' : '震度6弱',
+      };
+    case 60:
+      return {
+        short: isEn ? '6+' : isKo ? '6강' : '6強',
+        label: isEn ? 'Intensity 6-Upper' : isKo ? '진도 6강' : lang === 'zh' ? '震度6强' : '震度6強',
+      };
+    case 70:
+      return { short: '7', label: `${prefix}7` };
+    default:
+      return {
+        short: '-',
+        label: isEn ? 'Unknown' : isKo ? '진도 불명' : lang === 'zh' ? '震度不明' : '震度不明',
+      };
+  }
+}
+
+export function getScalePresentation(scale: number, lang: AppLanguage = 'ja'): ScalePresentation {
+  const { short, label } = localizeScaleText(scale, lang);
   switch (scale) {
     case 10:
       return {
-        short: '1',
-        label: '震度1',
+        short,
+        label,
         bgClass: 'bg-slate-800',
         textClass: 'text-slate-200',
         borderClass: 'border-slate-700',
@@ -60,8 +106,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 20:
       return {
-        short: '2',
-        label: '震度2',
+        short,
+        label,
         bgClass: 'bg-sky-950',
         textClass: 'text-sky-200',
         borderClass: 'border-sky-800',
@@ -69,8 +115,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 30:
       return {
-        short: '3',
-        label: '震度3',
+        short,
+        label,
         bgClass: 'bg-emerald-950',
         textClass: 'text-emerald-200',
         borderClass: 'border-emerald-800',
@@ -78,8 +124,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 40:
       return {
-        short: '4',
-        label: '震度4',
+        short,
+        label,
         bgClass: 'bg-amber-950',
         textClass: 'text-amber-200',
         borderClass: 'border-amber-700',
@@ -87,8 +133,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 45:
       return {
-        short: '5弱',
-        label: '震度5弱',
+        short,
+        label,
         bgClass: 'bg-orange-950',
         textClass: 'text-orange-200',
         borderClass: 'border-orange-700',
@@ -96,8 +142,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 50:
       return {
-        short: '5強',
-        label: '震度5強',
+        short,
+        label,
         bgClass: 'bg-orange-900',
         textClass: 'text-orange-100',
         borderClass: 'border-orange-600',
@@ -105,8 +151,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 55:
       return {
-        short: '6弱',
-        label: '震度6弱',
+        short,
+        label,
         bgClass: 'bg-red-950',
         textClass: 'text-red-200',
         borderClass: 'border-red-700',
@@ -114,8 +160,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 60:
       return {
-        short: '6強',
-        label: '震度6強',
+        short,
+        label,
         bgClass: 'bg-red-900',
         textClass: 'text-red-100',
         borderClass: 'border-red-600',
@@ -123,8 +169,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     case 70:
       return {
-        short: '7',
-        label: '震度7',
+        short,
+        label,
         bgClass: 'bg-fuchsia-950',
         textClass: 'text-fuchsia-100',
         borderClass: 'border-fuchsia-600',
@@ -132,8 +178,8 @@ export function getScalePresentation(scale: number): ScalePresentation {
       };
     default:
       return {
-        short: '-',
-        label: '震度不明',
+        short,
+        label,
         bgClass: 'bg-slate-900',
         textClass: 'text-slate-400',
         borderClass: 'border-slate-800',
@@ -142,19 +188,55 @@ export function getScalePresentation(scale: number): ScalePresentation {
   }
 }
 
-export function formatScaleRange(scaleFrom: number, scaleTo: number): string {
-  const from = getScalePresentation(scaleFrom).label;
+export function formatScaleRange(scaleFrom: number, scaleTo: number, lang: AppLanguage = 'ja'): string {
+  const from = getScalePresentation(scaleFrom, lang).label;
   if (scaleTo === 99) {
+    if (lang === 'en') return `${from} or higher`;
+    if (lang === 'zh') return `${from}左右或以上`;
+    if (lang === 'ko') return `${from} 이상`;
     return `${from}程度以上`;
   }
   if (scaleTo <= 0 || scaleTo === scaleFrom) {
     return from;
   }
-  const to = getScalePresentation(scaleTo).label;
+  const to = getScalePresentation(scaleTo, lang).label;
   return `${from}〜${to}`;
 }
 
-export function translateTsunamiStatus(code?: string): string {
+export function translateTsunamiStatus(code?: string, lang: AppLanguage = 'ja'): string {
+  if (lang === 'en') {
+    switch (code) {
+      case 'None': return 'No tsunami risk from this earthquake';
+      case 'Unknown':
+      case 'Checking': return 'Tsunami risk under investigation';
+      case 'NonEffective': return 'Minor sea-level fluctuations possible; no damage expected';
+      case 'Watch': return 'Tsunami Advisory is currently in effect';
+      case 'Warning': return 'Tsunami Warning is currently in effect';
+      default: return 'No tsunami data';
+    }
+  }
+  if (lang === 'zh') {
+    switch (code) {
+      case 'None': return '本次地震无需担心海啸风险';
+      case 'Unknown':
+      case 'Checking': return '正在调查是否存在海啸风险';
+      case 'NonEffective': return '可能出现轻微海面波动，无灾害风险';
+      case 'Watch': return '海啸注意报正在生效中';
+      case 'Warning': return '海啸警报正在生效中';
+      default: return '暂无海啸信息';
+    }
+  }
+  if (lang === 'ko') {
+    switch (code) {
+      case 'None': return '이 지진으로 인한 쓰나미 우려는 없습니다';
+      case 'Unknown':
+      case 'Checking': return '쓰나미 발생 여부를 조사 중입니다';
+      case 'NonEffective': return '약간의 해면 변동 가능성이 있으나 피해 우려는 없습니다';
+      case 'Watch': return '쓰나미 주의보가 발령되어 있습니다';
+      case 'Warning': return '쓰나미 경보 등이 발령되어 있습니다';
+      default: return '쓰나미 정보 없음';
+    }
+  }
   switch (code) {
     case 'None':
       return 'この地震による津波の心配はありません';
@@ -173,7 +255,40 @@ export function translateTsunamiStatus(code?: string): string {
   }
 }
 
-export function translateTsunamiShort(code?: string): string {
+export function translateTsunamiShort(code?: string, lang: AppLanguage = 'ja'): string {
+  if (lang === 'en') {
+    switch (code) {
+      case 'None': return 'No Tsunami';
+      case 'Unknown':
+      case 'Checking': return 'Checking';
+      case 'NonEffective': return 'Minor Ripple';
+      case 'Watch': return 'Advisory';
+      case 'Warning': return 'Warning';
+      default: return 'No Data';
+    }
+  }
+  if (lang === 'zh') {
+    switch (code) {
+      case 'None': return '无海啸风险';
+      case 'Unknown':
+      case 'Checking': return '调查中';
+      case 'NonEffective': return '轻微海面波动';
+      case 'Watch': return '海啸注意报';
+      case 'Warning': return '海啸警报';
+      default: return '无信息';
+    }
+  }
+  if (lang === 'ko') {
+    switch (code) {
+      case 'None': return '쓰나미 없음';
+      case 'Unknown':
+      case 'Checking': return '조사 중';
+      case 'NonEffective': return '약한 해면 변동';
+      case 'Watch': return '쓰나미 주의보';
+      case 'Warning': return '쓰나미 경보';
+      default: return '정보 없음';
+    }
+  }
   switch (code) {
     case 'None':
       return '津波の心配なし';
@@ -191,7 +306,40 @@ export function translateTsunamiShort(code?: string): string {
   }
 }
 
-export function translateIssueType(type?: string): string {
+export function translateIssueType(type?: string, lang: AppLanguage = 'ja'): string {
+  if (lang === 'en') {
+    switch (type) {
+      case 'ScalePrompt': return 'Intensity Prompt';
+      case 'Destination': return 'Hypocenter Report';
+      case 'ScaleAndDestination': return 'Hypocenter & Intensity';
+      case 'DetailScale': return 'Detailed Intensity Report';
+      case 'Foreign': return 'Distant Earthquake Info';
+      case 'Focus': return 'Tsunami Forecast';
+      default: return 'Earthquake Bulletin';
+    }
+  }
+  if (lang === 'zh') {
+    switch (type) {
+      case 'ScalePrompt': return '震度速报';
+      case 'Destination': return '震源信息';
+      case 'ScaleAndDestination': return '震源与震度信息';
+      case 'DetailScale': return '各地详细震度信息';
+      case 'Foreign': return '远地地震信息';
+      case 'Focus': return '海啸预报';
+      default: return '地震・防灾信息';
+    }
+  }
+  if (lang === 'ko') {
+    switch (type) {
+      case 'ScalePrompt': return '진도 속보';
+      case 'Destination': return '진원 정보';
+      case 'ScaleAndDestination': return '진원・진도 정보';
+      case 'DetailScale': return '각지 상세 진도 정보';
+      case 'Foreign': return '원거리 지진 정보';
+      case 'Focus': return '쓰나미 예보';
+      default: return '지진・방재 정보';
+    }
+  }
   switch (type) {
     case 'ScalePrompt':
       return '震度速報';
@@ -210,7 +358,31 @@ export function translateIssueType(type?: string): string {
   }
 }
 
-export function translateTsunamiGrade(grade: string): string {
+export function translateTsunamiGrade(grade: string, lang: AppLanguage = 'ja'): string {
+  if (lang === 'en') {
+    switch (grade) {
+      case 'MajorWarning': return 'Major Tsunami Warning';
+      case 'Warning': return 'Tsunami Warning';
+      case 'Watch': return 'Tsunami Advisory';
+      default: return 'Tsunami Forecast';
+    }
+  }
+  if (lang === 'zh') {
+    switch (grade) {
+      case 'MajorWarning': return '大海啸警报';
+      case 'Warning': return '海啸警报';
+      case 'Watch': return '海啸注意报';
+      default: return '海啸预报';
+    }
+  }
+  if (lang === 'ko') {
+    switch (grade) {
+      case 'MajorWarning': return '대쓰나미 경보';
+      case 'Warning': return '쓰나미 경보';
+      case 'Watch': return '쓰나미 주의보';
+      default: return '쓰나미 예보';
+    }
+  }
   switch (grade) {
     case 'MajorWarning':
       return '大津波警報';
@@ -223,18 +395,28 @@ export function translateTsunamiGrade(grade: string): string {
   }
 }
 
-export function formatDepth(depth?: number): string {
+export function formatDepth(depth?: number, lang: AppLanguage = 'ja'): string {
   if (depth === undefined || depth === null || depth < 0) {
+    if (lang === 'en') return 'Unknown';
+    if (lang === 'ko') return '불명';
     return '不明';
   }
   if (depth === 0) {
+    if (lang === 'en') return 'Very Shallow';
+    if (lang === 'zh') return '极浅';
+    if (lang === 'ko') return '매우 얕음';
     return 'ごく浅い';
   }
+  if (lang === 'en') return `~${depth}km`;
+  if (lang === 'zh') return `约${depth}km`;
+  if (lang === 'ko') return `약 ${depth}km`;
   return `約${depth}km`;
 }
 
-export function formatMagnitude(magnitude?: number): string {
+export function formatMagnitude(magnitude?: number, lang: AppLanguage = 'ja'): string {
   if (magnitude === undefined || magnitude === null || magnitude < 0) {
+    if (lang === 'en') return 'M Unknown';
+    if (lang === 'ko') return 'M 불명';
     return 'M不明';
   }
   return `M${magnitude.toFixed(1)}`;
@@ -260,40 +442,74 @@ export function formatShortTime(raw?: string): string {
   return cleaned;
 }
 
-export function getRecordTitle(record: P2PQuakeRecord): string {
+export function getRecordTitle(record: P2PQuakeRecord, lang: AppLanguage = 'ja'): string {
   switch (record.code) {
     case 551:
-      return record.earthquake.hypocenter.name || translateIssueType(record.issue.type);
+      return record.earthquake.hypocenter.name || translateIssueType(record.issue.type, lang);
     case 552:
-      if (record.cancelled) return '津波予報 解除';
-      return record.areas?.length
-        ? `津波予報 (${record.areas.map((a) => a.name).slice(0, 2).join('・')})`
-        : '津波予報';
+      if (record.cancelled) {
+        if (lang === 'en') return 'Tsunami Forecast Cancelled';
+        if (lang === 'zh') return '海啸预报 解除';
+        if (lang === 'ko') return '쓰나미 예보 해제';
+        return '津波予報 解除';
+      }
+      if (record.areas?.length) {
+        const prefix =
+          lang === 'en' ? 'Tsunami Forecast' : lang === 'zh' ? '海啸预报' : lang === 'ko' ? '쓰나미 예보' : '津波予報';
+        return `${prefix} (${record.areas.map((a) => a.name).slice(0, 2).join('・')})`;
+      }
+      return lang === 'en' ? 'Tsunami Forecast' : lang === 'zh' ? '海啸预报' : lang === 'ko' ? '쓰나미 예보' : '津波予報';
     case 554:
+      if (lang === 'en') return 'EEW Broadcast Detected';
+      if (lang === 'zh') return '紧急地震速报（发布检测）';
+      if (lang === 'ko') return '긴급지진속보 (발표 감지)';
       return '緊急地震速報（発表検出）';
     case 556: {
       if (record.cancelled) {
+        if (lang === 'en') return 'EEW Cancelled';
+        if (lang === 'zh') return '紧急地震速报（取消）';
+        if (lang === 'ko') return '긴급지진속보 (취소)';
         return '緊急地震速報（取消）';
       }
       const hypo = record.earthquake?.hypocenter.name;
+      if (lang === 'en') return hypo ? `EEW · ${hypo}` : 'Earthquake Early Warning';
+      if (lang === 'zh') return hypo ? `紧急地震速报・${hypo}` : '紧急地震速报（警报）';
+      if (lang === 'ko') return hypo ? `긴급지진속보・${hypo}` : '긴급지진속보 (경보)';
       return hypo ? `緊急地震速報・${hypo}` : '緊急地震速報（警報）';
     }
-    case 561:
-      return `地震感知情報（地域コード ${record.area}）`;
+    case 561: {
+      const areaLabel = formatP2PAreaLabel(record.area, lang);
+      if (lang === 'en') return `Felt Report (${areaLabel})`;
+      if (lang === 'zh') return `地震体感信息（${areaLabel}）`;
+      if (lang === 'ko') return `지진 체감 정보 (${areaLabel})`;
+      return `地震感知情報（${areaLabel}）`;
+    }
   }
 }
 
-export function getRecordCategoryLabel(record: P2PQuakeRecord): string {
+export function getRecordCategoryLabel(record: P2PQuakeRecord, lang: AppLanguage = 'ja'): string {
   switch (record.code) {
     case 551:
-      return translateIssueType(record.issue.type);
+      return translateIssueType(record.issue.type, lang);
     case 552:
+      if (lang === 'en') return 'Tsunami Forecast';
+      if (lang === 'zh') return '海啸预报';
+      if (lang === 'ko') return '쓰나미 예보';
       return '津波予報';
     case 554:
+      if (lang === 'en') return 'EEW Detection';
+      if (lang === 'zh') return '紧急地震速报 检测';
+      if (lang === 'ko') return '긴급지진속보 감지';
       return '緊急地震速報 検出';
     case 556:
+      if (lang === 'en') return record.cancelled ? 'EEW Cancelled' : 'EEW Warning';
+      if (lang === 'zh') return record.cancelled ? '紧急地震速报 取消' : '紧急地震速报 警报';
+      if (lang === 'ko') return record.cancelled ? '긴급지진속보 취소' : '긴급지진속보 경보';
       return record.cancelled ? '緊急地震速報 取消' : '緊急地震速報 警報';
     case 561:
+      if (lang === 'en') return 'Felt Shaking Report';
+      if (lang === 'zh') return '地震体感信息';
+      if (lang === 'ko') return '지진 체감 정보';
       return '地震感知情報';
   }
 }
@@ -412,30 +628,53 @@ export function groupMunicipalitiesByPrefAndScale(points?: QuakePoint[]): Array<
     }));
 }
 
-export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
-  const testPrefix = record.isTest ? '【テスト配信】' : '';
+export function formatQuakeForClipboard(
+  record: P2PQuakeRecord,
+  lang: AppLanguage = 'ja'
+): string {
+  const testPrefix = record.isTest
+    ? lang === 'en'
+      ? '[TEST] '
+      : lang === 'zh'
+      ? '【测试演练】'
+      : lang === 'ko'
+      ? '[테스트] '
+      : '【テスト配信】'
+    : '';
 
   if (record.code === 551) {
     const eq = record.earthquake;
-    const maxScale = getScalePresentation(eq.maxScale).label;
-    const lines = [
-      `${testPrefix}【地震情報】${translateIssueType(record.issue.type)}`,
-      `発生時刻：${formatTimestamp(eq.time)}`,
-      `震源地：${eq.hypocenter.name || '調査中'}`,
-      `最大震度：${maxScale}`,
-      `規模：${formatMagnitude(eq.hypocenter.magnitude)}`,
-      `深さ：${formatDepth(eq.hypocenter.depth)}`,
-      `津波：${translateTsunamiStatus(eq.domesticTsunami)}`,
-    ];
+    const maxScale = getScalePresentation(eq.maxScale, lang).label;
+    const lines =
+      lang === 'en'
+        ? [
+            `${testPrefix}[Earthquake Info] ${translateIssueType(record.issue.type, lang)}`,
+            `Occurred: ${formatTimestamp(eq.time)}`,
+            `Epicenter: ${eq.hypocenter.name || 'Investigating'}`,
+            `Max Intensity: ${maxScale}`,
+            `Magnitude: ${formatMagnitude(eq.hypocenter.magnitude, lang)}`,
+            `Depth: ${formatDepth(eq.hypocenter.depth, lang)}`,
+            `Tsunami: ${translateTsunamiStatus(eq.domesticTsunami, lang)}`,
+          ]
+        : [
+            `${testPrefix}【地震情報】${translateIssueType(record.issue.type, lang)}`,
+            `発生時刻：${formatTimestamp(eq.time)}`,
+            `震源地：${eq.hypocenter.name || '調査中'}`,
+            `最大震度：${maxScale}`,
+            `規模：${formatMagnitude(eq.hypocenter.magnitude, lang)}`,
+            `深さ：${formatDepth(eq.hypocenter.depth, lang)}`,
+            `津波：${translateTsunamiStatus(eq.domesticTsunami, lang)}`,
+          ];
 
     const grouped = groupMunicipalitiesByPrefAndScale(record.points);
     if (grouped.length > 0) {
-      lines.push('', '■ 各地の震度');
+      lines.push('', lang === 'en' ? '■ Observed Intensities' : '■ 各地の震度');
       grouped.forEach((group, groupIndex) => {
         if (groupIndex > 0) {
           lines.push('');
         }
-        lines.push(`〔${group.scaleLabel}〕`);
+        const localizedGroupScale = getScalePresentation(group.scale, lang).label;
+        lines.push(`〔${localizedGroupScale}〕`);
         for (const p of group.prefectures) {
           lines.push(`█ ${p.pref}`);
           lines.push(p.cities.join('　'));
@@ -444,14 +683,23 @@ export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
     }
 
     if (record.comments?.freeFormComment) {
-      lines.push('', `備考：${record.comments.freeFormComment}`);
+      lines.push('', `${lang === 'en' ? 'Notes: ' : '備考：'}${record.comments.freeFormComment}`);
     }
-    lines.push('', '情報提供：NEiN (P2P地震情報)');
+    lines.push('', lang === 'en' ? 'Source: NEiN (P2PQuake)' : '情報提供：NEiN (P2P地震情報)');
     return lines.join('\n');
   }
 
   if (record.code === 556) {
     if (record.cancelled) {
+      if (lang === 'en') {
+        return [
+          `${testPrefix}[EEW Cancelled]`,
+          `Issued: ${formatTimestamp(record.issue.time)}`,
+          `Report #${record.issue.serial}: The previous Earthquake Early Warning has been cancelled.`,
+          '',
+          'Source: NEiN (P2PQuake)',
+        ].join('\n');
+      }
       return [
         `${testPrefix}【緊急地震速報（取消）】`,
         `発表時刻：${formatTimestamp(record.issue.time)}`,
@@ -465,25 +713,46 @@ export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
     const maxAreaScale = record.areas?.length
       ? Math.max(...record.areas.map((a) => a.scaleFrom))
       : -1;
-    const lines = [
-      `${testPrefix}【緊急地震速報（警報）】第${record.issue.serial}報`,
-      `発表時刻：${formatTimestamp(record.issue.time)}`,
-      `震源地：${eq?.hypocenter.name || '解析中'}`,
-      `規模：${formatMagnitude(eq?.hypocenter.magnitude)} / 深さ：${formatDepth(eq?.hypocenter.depth)}`,
-      maxAreaScale > 0
-        ? `予想最大震度：${getScalePresentation(maxAreaScale).label}程度以上`
-        : '強い揺れに警戒してください',
-    ];
+    const lines =
+      lang === 'en'
+        ? [
+            `${testPrefix}[EEW Warning] Report #${record.issue.serial}`,
+            `Issued: ${formatTimestamp(record.issue.time)}`,
+            `Epicenter: ${eq?.hypocenter.name || 'Analyzing'}`,
+            `Magnitude: ${formatMagnitude(eq?.hypocenter.magnitude, lang)} / Depth: ${formatDepth(eq?.hypocenter.depth, lang)}`,
+            maxAreaScale > 0
+              ? `Predicted Max Intensity: ${getScalePresentation(maxAreaScale, lang).label} or higher`
+              : 'Prepare for strong shaking',
+          ]
+        : [
+            `${testPrefix}【緊急地震速報（警報）】第${record.issue.serial}報`,
+            `発表時刻：${formatTimestamp(record.issue.time)}`,
+            `震源地：${eq?.hypocenter.name || '解析中'}`,
+            `規模：${formatMagnitude(eq?.hypocenter.magnitude, lang)} / 深さ：${formatDepth(eq?.hypocenter.depth, lang)}`,
+            maxAreaScale > 0
+              ? `予想最大震度：${getScalePresentation(maxAreaScale, lang).label}程度以上`
+              : '強い揺れに警戒してください',
+          ];
     if (record.areas && record.areas.length > 0) {
       lines.push(
-        `警報対象地域：${record.areas.map((a) => a.name).join('・')}`
+        `${lang === 'en' ? 'Target Areas: ' : '警報対象地域：'}${record.areas.map((a) => a.name).join('・')}`
       );
     }
-    lines.push('', '情報提供：NEiN (P2P地震情報)');
+    lines.push('', lang === 'en' ? 'Source: NEiN (P2PQuake)' : '情報提供：NEiN (P2P地震情報)');
     return lines.join('\n');
   }
 
   if (record.code === 554) {
+    if (lang === 'en') {
+      return [
+        `${testPrefix}[EEW Broadcast Detected]`,
+        `Detected: ${formatTimestamp(record.time)}`,
+        `Type: ${record.type}`,
+        'Prepare for possible strong shaking and protect yourself.',
+        '',
+        'Source: NEiN (P2PQuake)',
+      ].join('\n');
+    }
     return [
       `${testPrefix}【緊急地震速報（発表検出）】`,
       `検出時刻：${formatTimestamp(record.time)}`,
@@ -495,22 +764,43 @@ export function formatQuakeForClipboard(record: P2PQuakeRecord): string {
   }
 
   if (record.code === 552) {
+    if (lang === 'en') {
+      return [
+        `${testPrefix}[Tsunami Forecast]`,
+        `Issued: ${formatTimestamp(record.issue.time)}`,
+        record.cancelled
+          ? 'All tsunami forecasts have been lifted.'
+          : `Target Areas: ${record.areas?.map((a) => `${a.name} (${translateTsunamiGrade(a.grade, lang)})`).join(' / ') || 'Checking'}`,
+        '',
+        'Source: NEiN (P2PQuake)',
+      ].join('\n');
+    }
     const lines = [
       `${testPrefix}【津波予報】`,
       `発表時刻：${formatTimestamp(record.issue.time)}`,
       record.cancelled
         ? '津波予報はすべて解除されました。'
-        : `対象地域：${record.areas?.map((a) => `${a.name}（${translateTsunamiGrade(a.grade)}）`).join('・') || '確認中'}`,
+        : `対象地域：${record.areas?.map((a) => `${a.name}（${translateTsunamiGrade(a.grade, lang)}）`).join('・') || '確認中'}`,
       '',
       '情報提供：NEiN (P2P地震情報)',
     ];
     return lines.join('\n');
   }
 
+  const resolvedArea = formatP2PAreaLabel(record.area, lang);
+  if (lang === 'en') {
+    return [
+      `${testPrefix}[Felt Shaking Report]`,
+      `Received: ${formatTimestamp(record.time)}`,
+      `Region: ${resolvedArea} (Code ${record.area})`,
+      '',
+      'Source: NEiN (P2PQuake)',
+    ].join('\n');
+  }
   return [
     `${testPrefix}【地震感知情報】`,
     `受信時刻：${formatTimestamp(record.time)}`,
-    `地域コード：${record.area}`,
+    `地方 / 地域：${resolvedArea}（コード ${record.area}）`,
     '',
     '情報提供：NEiN (P2P地震情報)',
   ].join('\n');
@@ -658,7 +948,17 @@ export function matchesQuakeText(record: P2PQuakeRecord, rawQuery: string): bool
   if (record.code === 552) {
     return '津波予報'.includes(q);
   }
-  return `地域コード ${record.area}`.includes(q) || '地震感知'.includes(q);
+  const areaInfo = resolveP2PAreaInfo(record.area);
+  const areaLabel = formatP2PAreaLabel(record.area).toLowerCase();
+  return (
+    areaLabel.includes(q) ||
+    (areaInfo?.region.toLowerCase().includes(q) ?? false) ||
+    (areaInfo?.pref.toLowerCase().includes(q) ?? false) ||
+    (areaInfo?.name.toLowerCase().includes(q) ?? false) ||
+    `地域コード ${record.area}`.includes(q) ||
+    String(record.area).includes(q) ||
+    '地震感知'.includes(q)
+  );
 }
 
 export function matchesQuakeSearch(

@@ -1,3 +1,4 @@
+import { formatP2PAreaLabel } from '../data/p2pAreaCodes';
 import type { P2PQuakeRecord } from '../types/quake';
 import {
   formatDepth,
@@ -36,7 +37,7 @@ export interface PdfReportModel {
   scaleDistribution: {
     title: string;
     totalCount: number;
-    unitLabel: '地点' | '地域';
+    unitLabel: string;
     bins: ScaleDistributionBin[];
   };
   municipalityGroups: Array<{
@@ -164,7 +165,7 @@ export function buildPdfReportModel(
   } else {
     metrics = [
       { label: '種別', value: '地震感知情報' },
-      { label: '地域コード', value: String(record.area) },
+      { label: '地方 / 地域', value: `${formatP2PAreaLabel(record.area)} (${record.area})` },
       { label: '受信時刻', value: occurredAt },
       { label: '出典', value: 'P2P地震情報' },
     ];

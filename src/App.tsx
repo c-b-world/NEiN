@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Activity, AlertCircle, CloudSun, Settings } from 'lucide-react';
+import { AlertCircle, CloudSun, Layers, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EEWWarningModal } from './components/EEWWarningModal';
 import { Header, type AppViewMode } from './components/Header';
@@ -15,6 +15,13 @@ import { WeatherDashboard } from './components/weather/WeatherDashboard';
 import { WorkspaceToolbar } from './components/WorkspaceToolbar';
 import { useQuakeFeed } from './hooks/useQuakeFeed';
 import type { QuakeFilter } from './types/quake';
+import {
+  type AppLanguage,
+  applyLanguageToDocument,
+  getMessages,
+  loadLanguage,
+  saveLanguage,
+} from './utils/i18n';
 import {
   type ColorThemeId,
   DEFAULT_THEME_SETTINGS,
@@ -79,12 +86,20 @@ export default function App() {
   const [activeView, setActiveView] = useState<AppViewMode>('quake');
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
+  const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const m = getMessages(lang);
 
   useEffect(() => {
     applyThemeToDocument(themeSettings);
     saveThemeSettings(themeSettings);
   }, [themeSettings]);
+
+  useEffect(() => {
+    applyLanguageToDocument(lang);
+    saveLanguage(lang);
+  }, [lang]);
 
   const handleToggleThemeMode = () => {
     setThemeSettings((prev) => ({
@@ -119,12 +134,20 @@ export default function App() {
     }
   };
 
+  const mobileSubItems: Array<{ id: QuakeFilter; label: string }> = [
+    { id: 'all', label: m.list.tabAll },
+    { id: 'quake', label: m.list.tabQuake },
+    { id: 'eew', label: m.list.tabEew },
+    { id: 'other', label: m.list.tabOther },
+  ];
+
   return (
     <div
       id="top"
       className="flex min-h-screen flex-col bg-[var(--nein-canvas)] text-slate-900 transition-colors dark:text-slate-100"
     >
       <Header
+        lang={lang}
         activeView={activeView}
         activeFilter={filter}
         onSelectFilter={handleSelectQuakeFilter}
@@ -134,35 +157,36 @@ export default function App() {
       />
 
       {/* Mobile View Switcher (visible < md) */}
-      <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-4 py-2 md:hidden">
-        <div role="tablist" aria-label="表示モード切替" className="grid grid-cols-3 gap-1.5">
+      <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3 py-2 md:hidden">
+        <div role="tablist" aria-label={m.nav.mobileModeSwitcher} className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
             role="tab"
+            data-testid="mobile-nav-nein-quack"
             aria-selected={activeView === 'quake'}
             onClick={() => setActiveView('quake')}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
               activeView === 'quake'
                 ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                 : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
             }`}
           >
-            <Activity className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>地震・津波</span>
+            <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{m.nav.quack}</span>
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={activeView === 'weather'}
             onClick={() => setActiveView('weather')}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
               activeView === 'weather'
                 ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                 : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
             }`}
           >
             <CloudSun className="h-3.5 w-3.5 shrink-0 text-[var(--nein-accent-text)]" aria-hidden="true" />
-            <span>天気</span>
+            <span className="truncate">{m.nav.weather}</span>
           </button>
           <button
             type="button"
@@ -170,20 +194,43 @@ export default function App() {
             data-testid="mobile-nav-system-settings"
             aria-selected={activeView === 'settings'}
             onClick={() => setActiveView('settings')}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
               activeView === 'settings'
                 ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
                 : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
             }`}
           >
             <Settings className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>システム設定</span>
+            <span className="truncate">{m.nav.settings}</span>
           </button>
         </div>
+
+        {activeView === 'quake' && (
+          <div className="mt-2 grid grid-cols-4 gap-1">
+            {mobileSubItems.map((sub) => {
+              const active = filter === sub.id;
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => handleSelectQuakeFilter(sub.id)}
+                  className={`min-w-0 truncate rounded border px-1.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                    active
+                      ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] font-semibold text-[var(--nein-accent-text)]'
+                      : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {activeView === 'quake' && (
         <WorkspaceToolbar
+          lang={lang}
           wsStatus={wsStatus}
           autoUpdateEnabled={autoUpdateEnabled}
           onToggleAutoUpdate={() => setAutoUpdateEnabled(!autoUpdateEnabled)}
@@ -209,9 +256,15 @@ export default function App() {
 
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
         {activeView === 'weather' ? (
-          <WeatherDashboard isActive={activeView === 'weather'} themeMode={themeSettings.mode} />
+          <WeatherDashboard
+            lang={lang}
+            isActive={activeView === 'weather'}
+            themeMode={themeSettings.mode}
+          />
         ) : activeView === 'settings' ? (
           <SystemSettingsPanel
+            lang={lang}
+            onChangeLang={setLang}
             themeMode={themeSettings.mode}
             onToggleThemeMode={handleToggleThemeMode}
             colorTheme={themeSettings.colorTheme}
@@ -237,7 +290,7 @@ export default function App() {
                 <div className="flex items-center gap-2.5">
                   <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
                   <span>
-                    最新データの取得中にエラーが発生しました（{error}）。
+                    {m.errorBanner.fetchErrorPrefix}（{error}）
                   </span>
                 </div>
                 <button
@@ -245,13 +298,14 @@ export default function App() {
                   onClick={() => void refreshNow()}
                   className="rounded border border-red-400 bg-red-100 px-3 py-1 font-medium text-red-900 hover:bg-red-200 dark:border-red-700 dark:bg-red-900/60 dark:text-red-100 dark:hover:bg-red-800 cursor-pointer"
                 >
-                  再試行
+                  {m.errorBanner.retry}
                 </button>
               </div>
             )}
 
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
               <QuakeList
+                lang={lang}
                 records={filteredRecords}
                 totalCount={records.length}
                 selectedId={selectedId}
@@ -282,6 +336,7 @@ export default function App() {
 
               <div ref={detailContainerRef} className="min-w-0 flex-1">
                 <QuakeDetailPanel
+                  lang={lang}
                   records={records}
                   selectedRecord={selectedRecord}
                   onSelectRecord={setSelectedId}
@@ -296,16 +351,15 @@ export default function App() {
 
       <footer className="border-t border-[var(--nein-border)] bg-[var(--nein-header)] py-4 text-xs text-slate-600 transition-colors dark:text-slate-500">
         <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-2 px-4 sm:flex-row sm:items-center sm:px-6">
-          <span>NEiN 防災 — リアルタイム地震情報・緊急地震速報・気象情報モニター</span>
-          <span>
-            出典：P2P地震情報 API (v2) ／ 気象庁防災情報JSON ／ Open-Meteo (CC BY 4.0) ※公式の防災情報を代替するものではありません
-          </span>
+          <span>{m.footer.brandLine}</span>
+          <span>{m.footer.sourceLine}</span>
         </div>
       </footer>
 
-      <EEWWarningModal alert={activeEEW} onDismiss={dismissEEW} />
+      <EEWWarningModal lang={lang} alert={activeEEW} onDismiss={dismissEEW} />
 
       <TestDispatchModal
+        lang={lang}
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
         onDispatch={triggerTestEEW}

@@ -1,7 +1,10 @@
-import { Check, Copy, FileDown, Loader2 } from 'lucide-react';
+import { Backpack, Check, Copy, FileDown, Loader2, ShieldAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { formatP2PAreaLabel } from '../data/p2pAreaCodes';
 import type { P2PQuakeRecord } from '../types/quake';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { buildEarthquakePreparednessAdvice } from '../utils/earthquakeAdvice';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import { exportQuakePdfReport } from '../utils/pdfReport';
 import {
   formatDepth,
@@ -22,6 +25,7 @@ import { EpicenterD3Map } from './EpicenterD3Map';
 import { ScaleDistributionChart } from './ScaleDistributionChart';
 
 interface QuakeDetailPanelProps {
+  lang: AppLanguage;
   records: P2PQuakeRecord[];
   selectedRecord: P2PQuakeRecord | null;
   onSelectRecord: (id: string) => void;
@@ -30,19 +34,26 @@ interface QuakeDetailPanelProps {
 }
 
 export function QuakeDetailPanel({
+  lang,
   records,
   selectedRecord,
   onSelectRecord,
   themeMode,
   colorTheme,
 }: QuakeDetailPanelProps) {
+  const m = getMessages(lang);
   const [copied, setCopied] = useState(false);
   const [pdfStatus, setPdfStatus] = useState<'idle' | 'exporting' | 'done' | 'error'>('idle');
 
   const formattedCopyText = useMemo(() => {
     if (!selectedRecord) return '';
-    return formatQuakeForClipboard(selectedRecord);
-  }, [selectedRecord]);
+    return formatQuakeForClipboard(selectedRecord, lang);
+  }, [selectedRecord, lang]);
+
+  const advice = useMemo(() => {
+    if (!selectedRecord) return null;
+    return buildEarthquakePreparednessAdvice(selectedRecord, lang);
+  }, [selectedRecord, lang]);
 
   useEffect(() => {
     setCopied(false);
@@ -75,21 +86,21 @@ export function QuakeDetailPanel({
     }
   };
 
-  if (!selectedRecord) {
+  if (!selectedRecord || !advice) {
     return (
       <section className="flex flex-1 flex-col items-center justify-center rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-10 text-center">
         <p className="text-base font-medium text-slate-800 dark:text-slate-300">
-          地震情報を選択してください
+          {m.detail.emptyTitle}
         </p>
         <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-500">
-          左の一覧から地震情報を選択すると、詳細データとコピー機能が表示されます。
+          {m.detail.emptyDesc}
         </p>
       </section>
     );
   }
 
-  const title = getRecordTitle(selectedRecord);
-  const category = getRecordCategoryLabel(selectedRecord);
+  const title = getRecordTitle(selectedRecord, lang);
+  const category = getRecordCategoryLabel(selectedRecord, lang);
 
   const groupedPoints =
     selectedRecord.code === 551
@@ -99,43 +110,87 @@ export function QuakeDetailPanel({
   let scaleDisplay = '-';
   let magnitudeDisplay = '--';
   let depthDisplay = '--';
-  let subInfoLabel = '発信元';
-  let subInfoValue = 'P2P地震情報';
+  let subInfoLabel = m.detail.metricSource;
+  let subInfoValue = lang === 'en' ? 'P2PQuake' : 'P2P地震情報';
 
   if (selectedRecord.code === 551) {
-    scaleDisplay = getScalePresentation(selectedRecord.earthquake.maxScale).label;
-    magnitudeDisplay = formatMagnitude(selectedRecord.earthquake.hypocenter.magnitude);
-    depthDisplay = formatDepth(selectedRecord.earthquake.hypocenter.depth);
-    subInfoLabel = '津波の有無';
-    subInfoValue = translateTsunamiShort(selectedRecord.earthquake.domesticTsunami);
+    scaleDisplay = getScalePresentation(selectedRecord.earthquake.maxScale, lang).label;
+    magnitudeDisplay = formatMagnitude(selectedRecord.earthquake.hypocenter.magnitude, lang);
+    depthDisplay = formatDepth(selectedRecord.earthquake.hypocenter.depth, lang);
+    subInfoLabel = m.detail.metricTsunami;
+    subInfoValue = translateTsunamiShort(selectedRecord.earthquake.domesticTsunami, lang);
   } else if (selectedRecord.code === 556) {
     const maxScale = getEEWMaxScale(selectedRecord);
     scaleDisplay = selectedRecord.cancelled
-      ? '取消'
+      ? lang === 'en'
+        ? 'Cancelled'
+        : lang === 'ko'
+        ? '취소'
+        : '取消'
       : maxScale > 0
-      ? `${getScalePresentation(maxScale).label}以上`
-      : '解析中';
-    magnitudeDisplay = formatMagnitude(selectedRecord.earthquake?.hypocenter.magnitude);
-    depthDisplay = formatDepth(selectedRecord.earthquake?.hypocenter.depth);
-    subInfoLabel = '報番号';
-    subInfoValue = `第${selectedRecord.issue.serial}報 (${selectedRecord.cancelled ? '取消報' : '警報'})`;
+      ? lang === 'en'
+        ? `${getScalePresentation(maxScale, lang).label}+`
+        : lang === 'ko'
+        ? `${getScalePresentation(maxScale, lang).label} 이상`
+        : `${getScalePresentation(maxScale, lang).label}以上`
+      : m.eewModal.analyzing;
+    magnitudeDisplay = formatMagnitude(selectedRecord.earthquake?.hypocenter.magnitude, lang);
+    depthDisplay = formatDepth(selectedRecord.earthquake?.hypocenter.depth, lang);
+    subInfoLabel = m.detail.metricIssueSerial;
+    subInfoValue =
+      lang === 'en'
+        ? `#${selectedRecord.issue.serial} (${selectedRecord.cancelled ? 'Cancelled' : 'Warning'})`
+        : `第${selectedRecord.issue.serial}報 (${selectedRecord.cancelled ? '取消報' : '警報'})`;
   } else if (selectedRecord.code === 554) {
-    scaleDisplay = '発表検出';
-    subInfoLabel = '検出種別';
+    scaleDisplay =
+      lang === 'en' ? 'Detected' : lang === 'zh' ? '发布检测' : lang === 'ko' ? '감지' : '発表検出';
+    subInfoLabel = m.detail.metricDetectionType;
     subInfoValue = selectedRecord.type;
   } else if (selectedRecord.code === 552) {
-    scaleDisplay = selectedRecord.cancelled ? '解除' : '発表中';
-    subInfoLabel = '発表元';
+    scaleDisplay = selectedRecord.cancelled
+      ? lang === 'en'
+        ? 'Lifted'
+        : lang === 'ko'
+        ? '해제'
+        : '解除'
+      : lang === 'en'
+      ? 'Active'
+      : lang === 'zh'
+      ? '发布中'
+      : lang === 'ko'
+      ? '발표 중'
+      : '発表中';
+    subInfoLabel = m.detail.metricSource;
     subInfoValue = selectedRecord.issue.source;
   } else if (selectedRecord.code === 561) {
-    scaleDisplay = '感知';
-    subInfoLabel = '地域コード';
-    subInfoValue = String(selectedRecord.area);
+    scaleDisplay =
+      lang === 'en' ? 'Felt' : lang === 'zh' ? '体感' : lang === 'ko' ? '체감' : '感知';
+    subInfoLabel = m.detail.metricRegion;
+    subInfoValue = `${formatP2PAreaLabel(selectedRecord.area, lang)} (${selectedRecord.area})`;
   }
+
+  const tierBadgeClass =
+    advice.tier === 'critical'
+      ? 'border-red-500/50 bg-red-500/15 text-red-700 dark:text-red-300'
+      : advice.tier === 'strong'
+      ? 'border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200'
+      : advice.tier === 'moderate'
+      ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+      : 'border-emerald-600/35 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300';
+
+  const getChipToneClass = (priority: 'urgent' | 'high' | 'normal') => {
+    if (priority === 'urgent') {
+      return 'border-red-500/45 bg-red-500/10 text-slate-900 dark:text-slate-100';
+    }
+    if (priority === 'high') {
+      return 'border-amber-500/40 bg-amber-500/10 text-slate-900 dark:text-slate-100';
+    }
+    return 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-900 dark:text-slate-100';
+  };
 
   return (
     <section
-      aria-label="選択中の地震詳細"
+      aria-label={title}
       className="flex min-w-0 flex-1 flex-col gap-5"
     >
       {/* Top Detail Summary & One-Click Copy */}
@@ -156,7 +211,7 @@ export function QuakeDetailPanel({
                 <>
                   <span aria-hidden="true">·</span>
                   <span className="font-semibold text-amber-600 dark:text-amber-400">
-                    テスト配信データ
+                    {m.detail.testPayloadTag}
                   </span>
                 </>
               )}
@@ -184,22 +239,22 @@ export function QuakeDetailPanel({
               {pdfStatus === 'exporting' ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  <span>PDF生成中...</span>
+                  <span>{m.detail.pdfGenerating}</span>
                 </>
               ) : pdfStatus === 'done' ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  <span>PDF出力完了</span>
+                  <span>{m.detail.pdfDone}</span>
                 </>
               ) : pdfStatus === 'error' ? (
                 <>
                   <FileDown className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-                  <span>PDF生成に失敗</span>
+                  <span>{m.detail.pdfError}</span>
                 </>
               ) : (
                 <>
                   <FileDown className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
-                  <span>PDFダウンロード</span>
+                  <span>{m.detail.pdfDownload}</span>
                 </>
               )}
             </button>
@@ -217,12 +272,12 @@ export function QuakeDetailPanel({
               {copied ? (
                 <>
                   <Check className="h-4 w-4" aria-hidden="true" />
-                  <span>コピーしました</span>
+                  <span>{m.detail.copied}</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-4 w-4" aria-hidden="true" />
-                  <span>地震情報をコピー</span>
+                  <span>{m.detail.copyQuake}</span>
                 </>
               )}
             </button>
@@ -233,7 +288,7 @@ export function QuakeDetailPanel({
         <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--nein-border)] bg-[var(--nein-border)] sm:grid-cols-4">
           <div className="bg-[var(--nein-sub)] px-4 py-3">
             <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              最大震度 / 種別
+              {m.detail.metricScaleOrType}
             </div>
             <div className="mt-1 font-mono text-lg font-bold tabular-nums text-slate-950 dark:text-slate-50">
               {scaleDisplay}
@@ -241,7 +296,7 @@ export function QuakeDetailPanel({
           </div>
           <div className="bg-[var(--nein-sub)] px-4 py-3">
             <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              マグニチュード
+              {m.detail.metricMagnitude}
             </div>
             <div className="mt-1 font-mono text-lg font-bold tabular-nums text-slate-950 dark:text-slate-50">
               {magnitudeDisplay}
@@ -249,7 +304,7 @@ export function QuakeDetailPanel({
           </div>
           <div className="bg-[var(--nein-sub)] px-4 py-3">
             <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              震源の深さ
+              {m.detail.metricDepth}
             </div>
             <div className="mt-1 font-mono text-lg font-bold tabular-nums text-slate-950 dark:text-slate-50">
               {depthDisplay}
@@ -266,9 +321,84 @@ export function QuakeDetailPanel({
         </div>
       </div>
 
+      {/* Scale-Based Evacuation Mindset & Emergency Stockpile Advice Chips */}
+      <section
+        aria-label={m.detail.adviceHeading}
+        data-testid="quake-advice-chips"
+        className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {m.detail.adviceHeading}
+            </h2>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              {advice.summary}
+            </p>
+          </div>
+          <span
+            data-testid="advice-tier-badge"
+            className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold ${tierBadgeClass}`}
+          >
+            {advice.tierLabel}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Evacuation Mindset Chips */}
+          <div>
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              <ShieldAlert className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
+              <span>{m.detail.adviceMindsetTitle}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {advice.evacuationMindset.map((chip) => (
+                <div
+                  key={chip.id}
+                  data-testid={`advice-chip-${chip.id}`}
+                  className={`flex-1 min-w-[210px] rounded-md border px-3 py-2.5 ${getChipToneClass(chip.priority)}`}
+                >
+                  <div className="text-xs font-bold leading-snug">{chip.title}</div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                    {chip.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Emergency Stockpile Chips */}
+          <div>
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              <Backpack className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
+              <span>{m.detail.adviceStockpileTitle}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {advice.stockpileAdvice.map((chip) => (
+                <div
+                  key={chip.id}
+                  data-testid={`advice-chip-${chip.id}`}
+                  className={`flex-1 min-w-[210px] rounded-md border px-3 py-2.5 ${getChipToneClass(chip.priority)}`}
+                >
+                  <div className="text-xs font-bold leading-snug">{chip.title}</div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                    {chip.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+          {m.detail.adviceDisclaimer}
+        </p>
+      </section>
+
       {/* Balanced 2-Column Stage: D3.js Epicenter Map + Formatted Copy Preview */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 items-stretch">
         <EpicenterD3Map
+          lang={lang}
           records={records}
           selectedRecord={selectedRecord}
           onSelectRecord={onSelectRecord}
@@ -279,7 +409,7 @@ export function QuakeDetailPanel({
         <div className="flex flex-col rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)]">
           <div className="flex items-center justify-between border-b border-[var(--nein-border-subtle)] px-4 py-2.5">
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-              コピー用フォーマットプレビュー
+              {m.detail.copyPreviewTitle}
             </span>
             <button
               type="button"
@@ -289,12 +419,12 @@ export function QuakeDetailPanel({
               {copied ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  <span className="text-emerald-700 dark:text-emerald-300">コピー完了</span>
+                  <span className="text-emerald-700 dark:text-emerald-300">{m.detail.copied}</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>テキストをコピー</span>
+                  <span>{m.detail.copyTextBtn}</span>
                 </>
               )}
             </button>
@@ -309,26 +439,26 @@ export function QuakeDetailPanel({
       </div>
 
       {/* Seismic Intensity Distribution Bar Chart (Recharts) */}
-      <ScaleDistributionChart record={selectedRecord} themeMode={themeMode} />
+      <ScaleDistributionChart lang={lang} record={selectedRecord} themeMode={themeMode} />
 
       {/* Observation Points / EEW Areas / Tsunami Areas */}
       {selectedRecord.code === 551 && groupedPoints.length > 0 && (
         <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            各地の震度（観測地点）
+            {m.detail.pointsHeading}
           </h3>
           <div className="mt-4 divide-y divide-[var(--nein-border-subtle)]">
             {groupedPoints.map((group) => {
-              const pres = getScalePresentation(group.scale);
+              const pres = getScalePresentation(group.scale, lang);
               return (
                 <div
                   key={group.scale}
                   className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start"
                 >
                   <div
-                    className={`inline-flex w-20 shrink-0 items-center justify-center rounded border px-2 py-1 font-mono text-xs font-bold tabular-nums ${pres.bgClass} ${pres.borderClass} ${pres.textClass}`}
+                    className={`inline-flex min-w-20 shrink-0 items-center justify-center rounded border px-2 py-1 font-mono text-xs font-bold tabular-nums ${pres.bgClass} ${pres.borderClass} ${pres.textClass}`}
                   >
-                    {group.scaleLabel}
+                    {pres.label}
                   </div>
                   <div className="flex-1 space-y-1.5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
                     {group.prefectures.map((p) => (
@@ -354,7 +484,7 @@ export function QuakeDetailPanel({
         selectedRecord.areas.length > 0 && (
           <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              緊急地震速報 対象地域・予測震度
+              {m.detail.eewAreasHeading}
             </h3>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {selectedRecord.areas.map((area, idx) => (
@@ -366,7 +496,7 @@ export function QuakeDetailPanel({
                     {area.name}
                   </span>
                   <span className="font-mono tabular-nums text-red-700 dark:text-red-300">
-                    {formatScaleRange(area.scaleFrom, area.scaleTo)}
+                    {formatScaleRange(area.scaleFrom, area.scaleTo, lang)}
                   </span>
                 </div>
               ))}
@@ -379,7 +509,7 @@ export function QuakeDetailPanel({
         selectedRecord.areas.length > 0 && (
           <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              津波予報 対象沿岸地域
+              {m.detail.tsunamiAreasHeading}
             </h3>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {selectedRecord.areas.map((area, idx) => (
@@ -391,7 +521,7 @@ export function QuakeDetailPanel({
                     {area.name}
                   </span>
                   <span className="text-cyan-700 dark:text-cyan-300">
-                    {translateTsunamiGrade(area.grade)}
+                    {translateTsunamiGrade(area.grade, lang)}
                   </span>
                 </div>
               ))}

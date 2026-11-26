@@ -1,50 +1,23 @@
 import { BellRing, X } from 'lucide-react';
 import { useEffect } from 'react';
 import type { TestEEWPreset } from '../types/quake';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 
 interface TestDispatchModalProps {
+  lang: AppLanguage;
   isOpen: boolean;
   onClose: () => void;
   onDispatch: (preset: TestEEWPreset) => void;
 }
 
-const TEST_PRESETS: Array<{
-  id: TestEEWPreset;
-  title: string;
-  subtitle: string;
-  meta: string;
-}> = [
-  {
-    id: 'kanto_alert',
-    title: '緊急地震速報（警報）— 首都圏想定',
-    subtitle: '震源：東京湾 · 予想最大震度 6弱程度以上',
-    meta: 'コード 556 / M6.9 / 深さ 約40km',
-  },
-  {
-    id: 'nankai_alert',
-    title: '緊急地震速報（警報）— 南海トラフ想定',
-    subtitle: '震源：和歌山県南方沖 · 予想最大震度 6強程度以上',
-    meta: 'コード 556 / M7.8 / 深さ 約20km',
-  },
-  {
-    id: 'eew_detection',
-    title: '緊急地震速報（発表検出）',
-    subtitle: '速報第1報到達前の発表検出イベントをシミュレート',
-    meta: 'コード 554 / 種別 Full',
-  },
-  {
-    id: 'eew_cancelled',
-    title: '緊急地震速報（取消報）',
-    subtitle: '誤報等による緊急地震速報の取消通知をシミュレート',
-    meta: 'コード 556 / cancelled: true',
-  },
-];
-
 export function TestDispatchModal({
+  lang,
   isOpen,
   onClose,
   onDispatch,
 }: TestDispatchModalProps) {
+  const m = getMessages(lang);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -55,6 +28,38 @@ export function TestDispatchModal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const presets: Array<{
+    id: TestEEWPreset;
+    title: string;
+    subtitle: string;
+    meta: string;
+  }> = [
+    {
+      id: 'kanto_alert',
+      title: m.testModal.kantoTitle,
+      subtitle: m.testModal.kantoSub,
+      meta: 'Code 556 / M6.9 / 40km',
+    },
+    {
+      id: 'nankai_alert',
+      title: m.testModal.nankaiTitle,
+      subtitle: m.testModal.nankaiSub,
+      meta: 'Code 556 / M7.8 / 20km',
+    },
+    {
+      id: 'eew_detection',
+      title: m.testModal.detectTitle,
+      subtitle: m.testModal.detectSub,
+      meta: 'Code 554 / Full',
+    },
+    {
+      id: 'eew_cancelled',
+      title: m.testModal.cancelTitle,
+      subtitle: m.testModal.cancelSub,
+      meta: 'Code 556 / cancelled: true',
+    },
+  ];
 
   return (
     <div
@@ -74,13 +79,13 @@ export function TestDispatchModal({
               id="test-dispatch-title"
               className="text-base font-bold text-slate-900 dark:text-slate-50"
             >
-              緊急地震速報 テスト送信
+              {m.testModal.title}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="テスト送信ダイアログを閉じる"
+            aria-label={m.testModal.cancel}
             className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 cursor-pointer"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -89,11 +94,11 @@ export function TestDispatchModal({
 
         <div className="p-5">
           <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-            送信するシナリオを選択すると、即座に緊急地震速報を受信した状態になり、画面中央の警告表示と警報音・履歴リストへの追加を確認できます。
+            {m.testModal.desc}
           </p>
 
           <div className="mt-4 space-y-2.5">
-            {TEST_PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
@@ -123,7 +128,7 @@ export function TestDispatchModal({
             onClick={onClose}
             className="rounded-md border border-[var(--nein-border)] bg-[var(--nein-surface)] px-4 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
           >
-            キャンセル
+            {m.testModal.cancel}
           </button>
         </div>
       </div>

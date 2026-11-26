@@ -19,6 +19,7 @@ import {
 } from '../../data/japanWeatherRegions';
 import { useWeatherDashboard } from '../../hooks/useWeatherDashboard';
 import type { SourceMeta, WeatherRegionGroup } from '../../types/weather';
+import { type AppLanguage, getMessages } from '../../utils/i18n';
 import type { ThemeMode } from '../../utils/themeSettings';
 import { describeJmaWeatherCode } from '../../utils/weatherCodes';
 import {
@@ -30,6 +31,7 @@ import { WeatherCharts } from './WeatherCharts';
 import { WeatherIcon } from './WeatherIcon';
 
 interface WeatherDashboardProps {
+  lang: AppLanguage;
   isActive: boolean;
   themeMode: ThemeMode;
 }
@@ -45,7 +47,16 @@ const REGION_GROUP_LIST: Array<{ id: WeatherRegionGroup; label: string }> = [
   { id: 'kyushu_okinawa', label: '九州・沖縄' },
 ];
 
-function StatusIndicator({ meta, label }: { meta: SourceMeta | undefined; label: string }) {
+function StatusIndicator({
+  meta,
+  label,
+  lang,
+}: {
+  meta: SourceMeta | undefined;
+  label: string;
+  lang: AppLanguage;
+}) {
+  const mw = getMessages(lang).weather;
   const status = meta?.status ?? 'loading';
   const dotClass =
     status === 'ok'
@@ -65,12 +76,12 @@ function StatusIndicator({ meta, label }: { meta: SourceMeta | undefined; label:
       : 'text-slate-700 dark:text-slate-300';
   const statusLabel =
     status === 'ok'
-      ? '正常'
+      ? mw.statusOk
       : status === 'stale'
-      ? '期限切れ'
+      ? mw.statusStale
       : status === 'error'
-      ? 'エラー'
-      : '取得中';
+      ? mw.statusError
+      : mw.statusLoading;
 
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
@@ -82,13 +93,14 @@ function StatusIndicator({ meta, label }: { meta: SourceMeta | undefined; label:
         </span>
       </div>
       <div className="font-mono text-[11px] tabular-nums text-slate-500">
-        発表/観測: {meta?.publishedAt ? formatJstTimestamp(meta.publishedAt) : '--'}
+        {mw.publishedAt} {meta?.publishedAt ? formatJstTimestamp(meta.publishedAt) : '--'}
       </div>
     </div>
   );
 }
 
-export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps) {
+export function WeatherDashboard({ lang, isActive, themeMode }: WeatherDashboardProps) {
+  const mw = getMessages(lang).weather;
   const {
     selectedOffice,
     selectedOfficeCode,
@@ -141,11 +153,11 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded bg-fuchsia-400 px-2 py-0.5 text-xs font-extrabold tracking-wider text-slate-950">
-                    特別警報 発令データあり
+                    {mw.specialWarningBadge}
                   </span>
                   {warning?.meta.isStale && (
                     <span className="rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-950">
-                      情報期限切れ（過去データ）
+                      {mw.staleBadge}
                     </span>
                   )}
                 </div>
@@ -153,7 +165,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
                   {specialWarnings.map((w) => `${w.areaName}: ${w.name}（${w.status}）`).join(' ／ ')}
                 </p>
                 <p className="mt-1 text-xs text-fuchsia-100/90">
-                  直ちに命を守る行動をとるとともに、気象庁公式サイト・自治体の避難情報を必ず確認してください。
+                  {mw.specialWarningAction}
                 </p>
               </div>
             </div>
@@ -163,7 +175,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
 
       {/* 2. Region Selector & API Connection / Timestamp Strip */}
       <section
-        aria-label="地域選択およびAPI接続状態"
+        aria-label={mw.prefectureLabel}
         className="rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)] p-4 sm:p-5"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -174,7 +186,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
                 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
               >
                 <MapPin className="h-3.5 w-3.5 text-[var(--nein-accent-text)]" aria-hidden="true" />
-                <span>都道府県・気象台を選択</span>
+                <span>{mw.prefectureLabel}</span>
               </label>
               <select
                 id="weather-office-select"
@@ -200,7 +212,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
                   htmlFor="weather-subarea-select"
                   className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  細分区域
+                  {mw.subAreaLabel}
                 </label>
                 <select
                   id="weather-subarea-select"
@@ -221,7 +233,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
           <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
             <div className="flex items-center gap-2 font-mono text-xs tabular-nums text-slate-600 dark:text-slate-400">
               <Clock className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
-              <span>データ取得時刻:</span>
+              <span>{mw.fetchedAt}</span>
               <span className="font-semibold text-slate-900 dark:text-slate-200">
                 {lastFetchedAt ? `${formatJstClock(lastFetchedAt)} JST` : '--:--:--'}
               </span>
@@ -239,10 +251,10 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               />
               <span>
                 {isLoadingDetail
-                  ? '取得中...'
+                  ? mw.fetchingBtn
                   : refreshCooldownSec > 0
-                  ? `更新待機 (${refreshCooldownSec}s)`
-                  : '最新データ取得'}
+                  ? `${mw.waitBtnPrefix} (${refreshCooldownSec}s)`
+                  : mw.refreshBtn}
               </span>
             </button>
           </div>
@@ -250,13 +262,14 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
 
         {/* 4 API Source Status Cards */}
         <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <StatusIndicator meta={forecast?.meta} label="気象庁 天気予報JSON" />
-          <StatusIndicator meta={warning?.meta} label="気象庁 警報・注意報JSON" />
+          <StatusIndicator lang={lang} meta={forecast?.meta} label="JMA Forecast JSON" />
+          <StatusIndicator lang={lang} meta={warning?.meta} label="JMA Warning JSON" />
           <StatusIndicator
+            lang={lang}
             meta={amedas?.meta}
-            label={`気象庁 アメダス（${selectedOffice.stationName}）`}
+            label={`JMA AMeDAS (${selectedOffice.stationName})`}
           />
-          <StatusIndicator meta={openMeteo?.meta} label="Open-Meteo 気象モデル" />
+          <StatusIndicator lang={lang} meta={openMeteo?.meta} label="Open-Meteo Model" />
         </div>
       </section>
 
@@ -271,7 +284,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                気象庁 公式 気象警報・注意報（{selectedOffice.prefectureName}）
+                {mw.officialWarningHeading}（{selectedOffice.prefectureName}）
               </h2>
             </div>
             <span className="font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
@@ -388,11 +401,11 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                独自の気象モデル参考情報
+                {mw.modelAdvisoryHeading}
               </h2>
             </div>
             <p className="mt-1 text-[11px] font-medium text-[var(--nein-accent-text)]">
-              ※ 気象庁発表の公式警報ではありません（Open-Meteo数値予測値からの自動算出）
+              {mw.modelAdvisoryNote}
             </p>
           </div>
 
@@ -436,7 +449,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3">
           <div>
             <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              現在の気象状況（{selectedOffice.stationName} 観測点 / {forecast?.activeAreaName ?? selectedOffice.prefectureName}）
+              {mw.currentConditionsHeading}（{selectedOffice.stationName} / {forecast?.activeAreaName ?? selectedOffice.prefectureName}）
             </h2>
             <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
               <strong className="text-emerald-700 dark:text-emerald-300">実測値</strong>（気象庁アメダス {obsTimeLabel}）と
@@ -464,7 +477,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
           {/* Temp */}
           <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-3.5">
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-              <span>気温</span>
+              <span>{mw.tempLabel}</span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                 {amedas?.tempC !== null && amedas?.tempC !== undefined ? 'アメダス実測' : 'モデル予測'}
               </span>
@@ -485,7 +498,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               )}
             </div>
             <div className="mt-1.5 font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
-              予測値:{' '}
+              Model:{' '}
               {openMeteo?.current?.tempC !== null && openMeteo?.current?.tempC !== undefined
                 ? `${openMeteo.current.tempC.toFixed(1)} ℃`
                 : '--'}
@@ -497,7 +510,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span className="inline-flex items-center gap-1">
                 <Droplets className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-                湿度
+                {mw.humidityLabel}
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                 {amedas?.humidityPct !== null && amedas?.humidityPct !== undefined ? 'アメダス実測' : 'モデル予測'}
@@ -519,7 +532,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               )}
             </div>
             <div className="mt-1.5 font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
-              予測値:{' '}
+              Model:{' '}
               {openMeteo?.current?.humidityPct !== null && openMeteo?.current?.humidityPct !== undefined
                 ? `${openMeteo.current.humidityPct} %`
                 : '--'}
@@ -531,7 +544,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span className="inline-flex items-center gap-1">
                 <Gauge className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
-                気圧
+                {mw.pressureLabel}
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                 {amedas?.pressureHpa !== null && amedas?.pressureHpa !== undefined ? 'アメダス実測' : 'モデル予測'}
@@ -553,7 +566,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               )}
             </div>
             <div className="mt-1.5 font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
-              予測値:{' '}
+              Model:{' '}
               {openMeteo?.current?.pressureMslHpa !== null && openMeteo?.current?.pressureMslHpa !== undefined
                 ? `${openMeteo.current.pressureMslHpa.toFixed(1)} hPa`
                 : '--'}
@@ -565,7 +578,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span className="inline-flex items-center gap-1">
                 <Wind className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                風速・風向
+                {mw.windLabel}
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                 {amedas?.windSpeedMs !== null && amedas?.windSpeedMs !== undefined ? 'アメダス実測' : 'モデル予測'}
@@ -589,7 +602,6 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="mt-1.5 flex items-center gap-1 font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
               <Compass className="h-3 w-3 text-slate-500" aria-hidden="true" />
               <span>
-                風向:{' '}
                 {amedas?.windDirectionText ??
                   openMeteo?.current?.windDirectionText ??
                   '--'}
@@ -602,7 +614,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span className="inline-flex items-center gap-1">
                 <Umbrella className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
-                降水量(1h)
+                {mw.precipLabel}
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                 {amedas?.precipitation1hMm !== null && amedas?.precipitation1hMm !== undefined ? 'アメダス実測' : 'モデル予測'}
@@ -624,7 +636,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
               )}
             </div>
             <div className="mt-1.5 font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
-              24h積算実測:{' '}
+              24h:{' '}
               {amedas?.precipitation24hMm !== null && amedas?.precipitation24hMm !== undefined
                 ? `${amedas.precipitation24hMm.toFixed(1)} mm`
                 : '--'}
@@ -634,9 +646,9 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
           {/* PoP (JMA Official) */}
           <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-3.5">
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-              <span>降水確率</span>
+              <span>{mw.popLabel}</span>
               <span className="text-[10px] font-semibold text-[var(--nein-accent-text)]">
-                気象庁公式
+                JMA
               </span>
             </div>
             <div className="mt-2 font-mono text-2xl font-bold tabular-nums text-slate-950 dark:text-slate-50">
@@ -669,7 +681,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
           <div className="flex items-center justify-between border-b border-[var(--nein-border-subtle)] pb-2.5">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                気象庁 公式 短期予報（{forecast?.activeAreaName ?? selectedOffice.prefectureName}）
+                {mw.shortForecastHeading}（{forecast?.activeAreaName ?? selectedOffice.prefectureName}）
               </h3>
               <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
                 発表: {forecast?.meta.publishedAt ? formatJstTimestamp(forecast.meta.publishedAt) : '--'}
@@ -759,7 +771,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              週間天気予報（{forecast?.activeAreaName ?? selectedOffice.prefectureName}）
+              {mw.weeklyForecastHeading}（{forecast?.activeAreaName ?? selectedOffice.prefectureName}）
             </h3>
             <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
               上段：気象庁 公式週間予報（信頼度付） ／ 下段：Open-Meteo 気象モデル予測値（参考比較）
@@ -868,7 +880,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
         <div className="flex flex-col gap-3 border-b border-[var(--nein-border-subtle)] pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              全国の都道府県別天気予報（58管区・地方別表示）
+              {mw.overviewHeading}（58）
             </h3>
             <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
               サーバー負荷軽減のため、地方別にキャッシュ付き並列制御（最大3並列）で取得しています。行をクリックすると詳細表示へ切り替わります。
@@ -1039,7 +1051,7 @@ export function WeatherDashboard({ isActive, themeMode }: WeatherDashboardProps)
           </li>
         </ul>
         <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3.5 py-2.5 font-medium text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200/95">
-          【免責事項】NEiNおよびNEiN WEATHERが提供する情報は、気象庁・自治体等が発表する公式の防災情報を代替するものではありません。また、通信障害や配信側の仕様変更等により情報が遅延・期限切れとなる場合があります。命に関わる判断・避難行動の際は、必ず気象庁公式サイト、自治体の防災無線・避難情報を直接ご確認ください。
+          {mw.disclaimer} — NEiNおよびNEiN WEATHERが提供する情報は、気象庁・自治体等が発表する公式の防災情報を代替するものではありません。また、通信障害や配信側の仕様変更等により情報が遅延・期限切れとなる場合があります。
         </p>
       </section>
     </div>

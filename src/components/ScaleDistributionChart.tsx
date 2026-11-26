@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { P2PQuakeRecord } from '../types/quake';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import {
   type ScaleDistributionBin,
   buildScaleDistribution,
@@ -17,6 +18,7 @@ import {
 import type { ThemeMode } from '../utils/themeSettings';
 
 interface ScaleDistributionChartProps {
+  lang: AppLanguage;
   record: P2PQuakeRecord;
   themeMode: ThemeMode;
 }
@@ -24,7 +26,7 @@ interface ScaleDistributionChartProps {
 interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{ payload: ScaleDistributionBin }>;
-  unitLabel: '地点' | '地域';
+  unitLabel: string;
 }
 
 function DistributionTooltip({
@@ -51,7 +53,7 @@ function DistributionTooltip({
       {bin.prefectures.length > 0 && (
         <div className="mt-1 max-w-[220px] text-[11px] leading-snug text-slate-600 dark:text-slate-400">
           {bin.prefectures.slice(0, 6).join('・')}
-          {bin.prefectures.length > 6 ? ' 他' : ''}
+          {bin.prefectures.length > 6 ? ' +' : ''}
         </div>
       )}
     </div>
@@ -79,10 +81,12 @@ function renderScaleBar(props: BarShapeProps) {
 }
 
 export function ScaleDistributionChart({
+  lang,
   record,
   themeMode,
 }: ScaleDistributionChartProps) {
-  const { bins, totalCount, unitLabel, title } = buildScaleDistribution(record);
+  const m = getMessages(lang);
+  const { bins, totalCount, unitLabel, title } = buildScaleDistribution(record, lang);
   const isDark = themeMode === 'dark';
   const gridStroke = isDark ? '#1E293B' : '#E2E8F0';
   const axisTickFill = isDark ? '#94A3B8' : '#475569';
@@ -98,19 +102,19 @@ export function ScaleDistributionChart({
           {title}
         </h3>
         <span className="font-mono text-xs tabular-nums text-slate-600 dark:text-slate-400">
-          合計 {totalCount} {unitLabel}
+          {m.detail.chartTotalPrefix} {totalCount} {unitLabel}
         </span>
       </div>
 
       {totalCount === 0 ? (
         <div className="mt-4 flex h-[160px] items-center justify-center rounded-md border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-4 text-center text-xs text-slate-500">
-          この情報には震度分布の地点データが含まれていません。
+          {m.detail.chartEmpty}
         </div>
       ) : (
         <div className="mt-4 h-[210px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
             <BarChart
-              key={record.id}
+              key={`${record.id}-${lang}`}
               data={bins}
               margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
             >

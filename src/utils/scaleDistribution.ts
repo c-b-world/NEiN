@@ -1,4 +1,6 @@
 import type { P2PQuakeRecord } from '../types/quake';
+import { type AppLanguage, getMessages } from './i18n';
+import { getScalePresentation } from './quakeParser';
 
 export interface ScaleDistributionBin {
   scale: number;
@@ -12,7 +14,7 @@ export interface ScaleDistributionBin {
 export interface ScaleDistributionResult {
   bins: ScaleDistributionBin[];
   totalCount: number;
-  unitLabel: '地点' | '地域';
+  unitLabel: string;
   title: string;
 }
 
@@ -34,8 +36,10 @@ const ORDERED_SCALES: Array<{
 ];
 
 export function buildScaleDistribution(
-  record: P2PQuakeRecord | null
+  record: P2PQuakeRecord | null,
+  lang: AppLanguage = 'ja'
 ): ScaleDistributionResult {
+  const m = getMessages(lang);
   const counts = new Map<number, number>();
   const prefsByScale = new Map<number, Set<string>>();
 
@@ -49,16 +53,16 @@ export function buildScaleDistribution(
     }
   };
 
-  let unitLabel: '地点' | '地域' = '地点';
-  let title = '震度別 観測地点分布';
+  let unitLabel: string = m.detail.chartUnitPoints;
+  let title: string = m.detail.chartTitle551;
 
   if (record?.code === 551 && record.points) {
     for (const pt of record.points) {
       addEntry(pt.scale, pt.pref);
     }
   } else if (record?.code === 556 && !record.cancelled && record.areas) {
-    unitLabel = '地域';
-    title = '予想震度別 警報対象地域分布';
+    unitLabel = m.detail.chartUnitAreas;
+    title = lang === 'ja' ? '予想震度別 警報対象地域分布' : m.detail.chartTitle556;
     for (const area of record.areas) {
       addEntry(area.scaleFrom, area.pref);
     }
@@ -68,8 +72,12 @@ export function buildScaleDistribution(
   const bins: ScaleDistributionBin[] = ORDERED_SCALES.map((def) => {
     const count = counts.get(def.scale) ?? 0;
     totalCount += count;
+    const localized = getScalePresentation(def.scale, lang);
     return {
-      ...def,
+      scale: def.scale,
+      shortLabel: localized.short,
+      fullLabel: localized.label,
+      color: def.color,
       count,
       prefectures: Array.from(prefsByScale.get(def.scale) ?? []),
     };

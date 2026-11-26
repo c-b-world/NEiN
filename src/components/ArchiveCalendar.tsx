@@ -9,16 +9,16 @@ import {
   getMonthRangeYmd,
   summarizeMonthQuakes,
 } from '../utils/archiveApi';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import { getScalePresentation, normalizeQuakeRecord } from '../utils/quakeParser';
 
 interface ArchiveCalendarProps {
+  lang: AppLanguage;
   selectedDate: string | null;
   onSelectDate: (ymd: string) => void;
   onExitArchive: () => void;
   onClose?: () => void;
 }
-
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 function getSeverityDotClass(maxScale: number): string {
   if (maxScale >= 45) return 'bg-red-500 dark:bg-red-400';
@@ -27,16 +27,18 @@ function getSeverityDotClass(maxScale: number): string {
 }
 
 export function ArchiveCalendar({
+  lang,
   selectedDate,
   onSelectDate,
   onExitArchive,
   onClose,
 }: ArchiveCalendarProps) {
+  const m = getMessages(lang);
   const today = useMemo(() => getJstTodayParts(), []);
   const initialDateParts = useMemo(() => {
     if (selectedDate) {
-      const [y, m] = selectedDate.split('-').map(Number);
-      if (y && m) return { year: y, month: m };
+      const [y, mo] = selectedDate.split('-').map(Number);
+      if (y && mo) return { year: y, month: mo };
     }
     return { year: today.year, month: today.month };
   }, [selectedDate, today.year, today.month]);
@@ -100,7 +102,7 @@ export function ArchiveCalendar({
       setViewYear((y) => y - 1);
       setViewMonth(12);
     } else {
-      setViewMonth((m) => m - 1);
+      setViewMonth((mo) => mo - 1);
     }
   };
 
@@ -110,7 +112,7 @@ export function ArchiveCalendar({
       setViewYear((y) => y + 1);
       setViewMonth(1);
     } else {
-      setViewMonth((m) => m + 1);
+      setViewMonth((mo) => mo + 1);
     }
   };
 
@@ -136,7 +138,7 @@ export function ArchiveCalendar({
     <div
       data-testid="archive-calendar"
       role="region"
-      aria-label="過去地震データ カレンダー選択"
+      aria-label={m.list.pickDate}
       className="mt-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-3 shadow-xl"
     >
       {/* Month / Year Navigation */}
@@ -144,7 +146,7 @@ export function ArchiveCalendar({
         <button
           type="button"
           onClick={handlePrevMonth}
-          aria-label="前の月へ"
+          aria-label="Prev Month"
           className="inline-flex h-7 w-7 items-center justify-center rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -152,7 +154,7 @@ export function ArchiveCalendar({
 
         <div className="flex items-center gap-1.5">
           <label htmlFor="archive-cal-year" className="sr-only">
-            年を選択
+            Year
           </label>
           <select
             id="archive-cal-year"
@@ -168,13 +170,13 @@ export function ArchiveCalendar({
           >
             {yearOptions.map((y) => (
               <option key={y} value={y}>
-                {y}年
+                {lang === 'en' ? y : lang === 'ko' ? `${y}년` : lang === 'zh' ? `${y}年` : `${y}年`}
               </option>
             ))}
           </select>
 
           <label htmlFor="archive-cal-month" className="sr-only">
-            月を選択
+            Month
           </label>
           <select
             id="archive-cal-month"
@@ -182,9 +184,13 @@ export function ArchiveCalendar({
             onChange={(e) => setViewMonth(Number(e.target.value))}
             className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 focus:border-[var(--nein-accent)] focus:outline-none cursor-pointer"
           >
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}月
+            {monthOptions.map((mo) => (
+              <option key={mo} value={mo}>
+                {lang === 'en'
+                  ? String(mo).padStart(2, '0')
+                  : lang === 'ko'
+                  ? `${mo}월`
+                  : `${mo}月`}
               </option>
             ))}
           </select>
@@ -194,7 +200,7 @@ export function ArchiveCalendar({
           type="button"
           onClick={handleNextMonth}
           disabled={isAtCurrentMonth}
-          aria-label="次の月へ"
+          aria-label="Next Month"
           className="inline-flex h-7 w-7 items-center justify-center rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 hover:bg-slate-200/70 disabled:opacity-35 disabled:cursor-not-allowed dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
         >
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -203,9 +209,9 @@ export function ArchiveCalendar({
 
       {/* Weekday Labels */}
       <div className="mt-2.5 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold">
-        {WEEKDAYS.map((wd, idx) => (
+        {m.calendar.weekdays.map((wd, idx) => (
           <div
-            key={wd}
+            key={`${wd}-${idx}`}
             className={
               idx === 0
                 ? 'text-red-600 dark:text-red-400/85'
@@ -226,13 +232,13 @@ export function ArchiveCalendar({
           const summary = cell.inCurrentMonth ? monthSummary[cell.ymd] : undefined;
           const scaleLabel =
             summary && summary.maxScale > 0
-              ? getScalePresentation(summary.maxScale).label
+              ? getScalePresentation(summary.maxScale, lang).label
               : null;
 
-          const ariaParts = [`${cell.year}年${cell.month}月${cell.day}日`];
+          const ariaParts = [cell.ymd];
           if (summary) {
-            ariaParts.push(`${summary.count}件`);
-            if (scaleLabel) ariaParts.push(`最大${scaleLabel}`);
+            ariaParts.push(String(summary.count));
+            if (scaleLabel) ariaParts.push(scaleLabel);
           }
 
           return (
@@ -243,7 +249,7 @@ export function ArchiveCalendar({
               onClick={() => handleSelectCell(cell.ymd)}
               title={
                 summary
-                  ? `${cell.ymd}: ${summary.count}件${scaleLabel ? ` (最大${scaleLabel})` : ''}`
+                  ? `${cell.ymd}: ${summary.count}${scaleLabel ? ` (${scaleLabel})` : ''}`
                   : cell.ymd
               }
               aria-label={ariaParts.join(' ')}
@@ -282,20 +288,20 @@ export function ArchiveCalendar({
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--nein-border-subtle)] pt-2 text-[11px]">
         <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-400">
           {loadingMonth ? (
-            <span>月間履歴を確認中...</span>
+            <span>{m.calendar.loadingMonth}</span>
           ) : (
             <>
               <span className="inline-flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-sky-500 dark:bg-sky-400" aria-hidden="true" />
-                震度1-2
+                {m.calendar.scale12}
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden="true" />
-                3-4
+                {m.calendar.scale34}
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 dark:bg-red-400" aria-hidden="true" />
-                5弱+
+                {m.calendar.scale5Plus}
               </span>
             </>
           )}
@@ -311,7 +317,7 @@ export function ArchiveCalendar({
             }}
             className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-[11px] font-medium text-slate-800 hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
           >
-            今日を取得
+            {m.calendar.todayBtn}
           </button>
 
           {selectedDate && (
@@ -324,7 +330,7 @@ export function ArchiveCalendar({
               className="inline-flex items-center gap-1 rounded border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-2 py-1 text-[11px] font-medium text-[var(--nein-accent-text)] hover:opacity-85 cursor-pointer"
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
-              <span>リアルタイム</span>
+              <span>{m.calendar.realtimeBtn}</span>
             </button>
           )}
         </div>

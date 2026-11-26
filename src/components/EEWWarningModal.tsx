@@ -2,6 +2,7 @@ import { AlertTriangle, Check, Copy, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { EEW556, EEWDetection554 } from '../types/quake';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import {
   formatDepth,
   formatMagnitude,
@@ -13,11 +14,13 @@ import {
 } from '../utils/quakeParser';
 
 interface EEWWarningModalProps {
+  lang: AppLanguage;
   alert: EEW556 | EEWDetection554 | null;
   onDismiss: () => void;
 }
 
-export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
+export function EEWWarningModal({ lang, alert, onDismiss }: EEWWarningModalProps) {
+  const m = getMessages(lang);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -39,10 +42,10 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
 
   const isCancelled = alert.code === 556 && alert.cancelled;
   const maxScale = alert.code === 556 ? getEEWMaxScale(alert) : -1;
-  const scalePresentation = maxScale > 0 ? getScalePresentation(maxScale) : null;
+  const scalePresentation = maxScale > 0 ? getScalePresentation(maxScale, lang) : null;
 
   const handleCopyAlert = async () => {
-    const ok = await copyTextToClipboard(formatQuakeForClipboard(alert));
+    const ok = await copyTextToClipboard(formatQuakeForClipboard(alert, lang));
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
@@ -84,21 +87,21 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
                   className="text-base font-bold tracking-tight text-white sm:text-xl"
                 >
                   {isCancelled
-                    ? '緊急地震速報（取消）'
+                    ? m.eewModal.cancelledTitle
                     : alert.code === 554
-                    ? '緊急地震速報（発表検出）'
-                    : '緊急地震速報（警報）'}
+                    ? m.eewModal.detectTitle
+                    : m.eewModal.warningTitle}
                 </h2>
                 {alert.isTest && (
                   <span className="shrink-0 whitespace-nowrap rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-950">
-                    テスト送信
+                    {m.eewModal.testBadge}
                   </span>
                 )}
               </div>
               <p className="mt-0.5 font-mono text-xs tabular-nums text-white/85">
                 {alert.code === 556
-                  ? `第${alert.issue.serial}報 · ${formatTimestamp(alert.issue.time)}`
-                  : `検出時刻 ${formatTimestamp(alert.time)}`}
+                  ? `${lang === 'en' ? `#${alert.issue.serial}` : `第${alert.issue.serial}報`} · ${formatTimestamp(alert.issue.time)}`
+                  : formatTimestamp(alert.time)}
               </p>
             </div>
           </div>
@@ -106,7 +109,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
           <button
             type="button"
             onClick={onDismiss}
-            aria-label="緊急地震速報の警告を閉じる"
+            aria-label={m.eewModal.closeBtn}
             className="rounded-md p-2 text-white/80 transition-colors hover:bg-black/20 hover:text-white cursor-pointer focus-visible:outline-2 focus-visible:outline-white"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -117,15 +120,16 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
         <div className="space-y-5 p-6">
           {isCancelled ? (
             <div className="rounded-md border border-slate-700 bg-slate-900 p-4 text-sm text-slate-200">
-              先ほど発表された緊急地震速報は取り消されました。最新の地震情報にご注意ください。
+              {m.eewModal.cancelledDesc}
             </div>
           ) : alert.code === 554 ? (
             <div className="space-y-3">
               <p className="text-lg font-bold text-red-100">
-                強い揺れが到達する可能性があります
+                {m.eewModal.detectHeadline}
               </p>
               <p className="text-sm leading-relaxed text-slate-300">
-                P2P地震情報ネットワークが緊急地震速報の発表を検出しました（種別：{alert.type}）。周囲の状況を確認し、頭を守って安全な姿勢をとってください。
+                {m.eewModal.detectDescPrefix}
+                {alert.type}）— {m.eewModal.safetyNotice}
               </p>
             </div>
           ) : (
@@ -133,14 +137,14 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-xs font-medium text-red-300">
-                    震源地（推定）
+                    {m.eewModal.hypocenterLabel}
                   </div>
                   <div className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">
-                    {alert.earthquake?.hypocenter.name || '解析中'}
+                    {alert.earthquake?.hypocenter.name || m.eewModal.analyzing}
                   </div>
                   <div className="mt-1.5 font-mono text-xs tabular-nums text-red-200/80">
-                    規模 {formatMagnitude(alert.earthquake?.hypocenter.magnitude)} · 深さ{' '}
-                    {formatDepth(alert.earthquake?.hypocenter.depth)}
+                    {formatMagnitude(alert.earthquake?.hypocenter.magnitude, lang)} ·{' '}
+                    {formatDepth(alert.earthquake?.hypocenter.depth, lang)}
                     {alert.earthquake?.condition
                       ? ` · ${alert.earthquake.condition}`
                       : ''}
@@ -150,12 +154,12 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
                 {scalePresentation && (
                   <div className="shrink-0 rounded-md border border-red-500/60 bg-red-950/90 px-4 py-3 text-center">
                     <div className="text-[11px] font-medium text-red-200">
-                      予想最大震度
+                      {m.eewModal.predictedMaxScale}
                     </div>
                     <div className="mt-0.5 font-mono text-2xl font-extrabold tabular-nums text-white">
                       {scalePresentation.label}
                       <span className="ml-1 text-xs font-medium text-red-200">
-                        程度以上
+                        {m.eewModal.orHigher}
                       </span>
                     </div>
                   </div>
@@ -165,7 +169,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
               {alert.areas && alert.areas.length > 0 && (
                 <div>
                   <div className="text-xs font-semibold text-red-200">
-                    強い揺れに警戒が必要な地域
+                    {m.eewModal.targetAreas}
                   </div>
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {alert.areas.map((area, idx) => (
@@ -177,7 +181,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
                           {area.name}
                         </span>
                         <span className="font-mono tabular-nums text-red-200">
-                          {formatScaleRange(area.scaleFrom, area.scaleTo)}
+                          {formatScaleRange(area.scaleFrom, area.scaleTo, lang)}
                         </span>
                       </div>
                     ))}
@@ -186,7 +190,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
               )}
 
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-                慌てず、机の下に入る・頭を守るなど、身の安全を最優先に行動してください。
+                {m.eewModal.safetyNotice}
               </div>
             </>
           )}
@@ -202,12 +206,12 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
             {copied ? (
               <>
                 <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-                <span>コピーしました</span>
+                <span>{m.detail.copied}</span>
               </>
             ) : (
               <>
                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>警報情報をコピー</span>
+                <span>{m.eewModal.copyAlert}</span>
               </>
             )}
           </button>
@@ -221,7 +225,7 @@ export function EEWWarningModal({ alert, onDismiss }: EEWWarningModalProps) {
                 : 'bg-red-600 text-white hover:bg-red-500'
             }`}
           >
-            確認して閉じる
+            {m.eewModal.closeBtn}
           </button>
         </div>
       </div>

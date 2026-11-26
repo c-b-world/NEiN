@@ -1,8 +1,9 @@
 import { Calendar, Check, ChevronDown, Copy, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import type { P2PQuakeRecord, QuakeFilter } from '../types/quake';
-import { formatJapaneseDateHeading } from '../utils/archiveApi';
+import { formatDisplayYmd, formatJapaneseDateHeading } from '../utils/archiveApi';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { type AppLanguage, getMessages } from '../utils/i18n';
 import {
   formatDepth,
   formatMagnitude,
@@ -16,6 +17,7 @@ import {
 import { ArchiveCalendar } from './ArchiveCalendar';
 
 interface QuakeListProps {
+  lang: AppLanguage;
   records: P2PQuakeRecord[];
   totalCount: number;
   selectedId: string | null;
@@ -49,36 +51,18 @@ interface QuakeListProps {
   onExitArchiveMode: () => void;
 }
 
-const SCALE_OPTIONS: Array<{ value: number; label: string }> = [
-  { value: 0, label: 'すべて' },
-  { value: 10, label: '震度1以上' },
-  { value: 20, label: '震度2以上' },
-  { value: 30, label: '震度3以上' },
-  { value: 40, label: '震度4以上' },
-  { value: 45, label: '震度5弱以上' },
-  { value: 50, label: '震度5強以上' },
-  { value: 55, label: '震度6弱以上' },
-  { value: 60, label: '震度6強以上' },
-  { value: 70, label: '震度7' },
-];
+const SCALE_VALUES = [0, 10, 20, 30, 40, 45, 50, 55, 60, 70];
+const MAGNITUDE_VALUES = ['', '3', '4', '5', '6', '7'];
 
-const MAGNITUDE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'すべて' },
-  { value: '3', label: 'M3.0以上' },
-  { value: '4', label: 'M4.0以上' },
-  { value: '5', label: 'M5.0以上' },
-  { value: '6', label: 'M6.0以上' },
-  { value: '7', label: 'M7.0以上' },
-];
-
-function ScaleSquare({ record }: { record: P2PQuakeRecord }) {
+function ScaleSquare({ record, lang }: { record: P2PQuakeRecord; lang: AppLanguage }) {
   if (record.code === 551) {
-    const scale = getScalePresentation(record.earthquake.maxScale);
+    const scale = getScalePresentation(record.earthquake.maxScale, lang);
+    const caption = lang === 'en' ? 'Scale' : lang === 'ko' ? '진도' : '震度';
     return (
       <div
         className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border ${scale.bgClass} ${scale.borderClass} ${scale.textClass}`}
       >
-        <span className="text-[9px] leading-none opacity-80">震度</span>
+        <span className="text-[9px] leading-none opacity-80">{caption}</span>
         <span className="mt-0.5 font-mono text-sm font-bold leading-none tabular-nums">
           {scale.short}
         </span>
@@ -90,16 +74,18 @@ function ScaleSquare({ record }: { record: P2PQuakeRecord }) {
     if (record.cancelled) {
       return (
         <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-slate-600 bg-slate-800 text-slate-200">
-          <span className="text-[10px] font-semibold leading-tight">取消</span>
+          <span className="text-[10px] font-semibold leading-tight">
+            {lang === 'en' ? 'CXL' : lang === 'ko' ? '취소' : '取消'}
+          </span>
         </div>
       );
     }
     const maxScale = getEEWMaxScale(record);
-    const scale = maxScale > 0 ? getScalePresentation(maxScale) : null;
+    const scale = maxScale > 0 ? getScalePresentation(maxScale, lang) : null;
     return (
       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-red-600 bg-red-950 text-red-100">
         <span className="text-[9px] font-semibold leading-none text-red-300">
-          警報
+          {lang === 'en' ? 'EEW' : lang === 'ko' ? '경보' : '警報'}
         </span>
         <span className="mt-0.5 font-mono text-xs font-bold leading-none tabular-nums">
           {scale ? scale.short : 'EEW'}
@@ -111,7 +97,9 @@ function ScaleSquare({ record }: { record: P2PQuakeRecord }) {
   if (record.code === 554) {
     return (
       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-amber-700 bg-amber-950 text-amber-200">
-        <span className="text-[10px] font-semibold leading-tight">検出</span>
+        <span className="text-[10px] font-semibold leading-tight">
+          {lang === 'en' ? 'DET' : lang === 'ko' ? '감지' : '検出'}
+        </span>
       </div>
     );
   }
@@ -119,19 +107,24 @@ function ScaleSquare({ record }: { record: P2PQuakeRecord }) {
   if (record.code === 552) {
     return (
       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-cyan-700 bg-cyan-950 text-cyan-200">
-        <span className="text-[10px] font-semibold leading-tight">津波</span>
+        <span className="text-[10px] font-semibold leading-tight">
+          {lang === 'en' ? 'TSU' : lang === 'zh' ? '海啸' : lang === 'ko' ? '해일' : '津波'}
+        </span>
       </div>
     );
   }
 
   return (
     <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400">
-      <span className="text-[10px] font-medium leading-tight">感知</span>
+      <span className="text-[10px] font-medium leading-tight">
+        {lang === 'en' ? 'FELT' : lang === 'zh' ? '体感' : lang === 'ko' ? '체감' : '感知'}
+      </span>
     </div>
   );
 }
 
 export function QuakeList({
+  lang,
   records,
   totalCount,
   selectedId,
@@ -159,11 +152,12 @@ export function QuakeList({
   onSelectArchiveDate,
   onExitArchiveMode,
 }: QuakeListProps) {
+  const m = getMessages(lang);
   const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const handleRowCopy = async (record: P2PQuakeRecord) => {
-    const ok = await copyTextToClipboard(formatQuakeForClipboard(record));
+    const ok = await copyTextToClipboard(formatQuakeForClipboard(record, lang));
     if (ok) {
       setCopiedRowId(record.id);
       window.setTimeout(() => {
@@ -172,16 +166,45 @@ export function QuakeList({
     }
   };
 
+  const scaleOptions = SCALE_VALUES.map((val) => {
+    if (val === 0) return { value: 0, label: m.list.allOption };
+    const pres = getScalePresentation(val, lang);
+    if (val === 70) return { value: val, label: pres.label };
+    return {
+      value: val,
+      label: `${m.list.scaleOverPrefix}${pres.label}${m.list.scaleOverSuffix}`,
+    };
+  });
+
+  const magOptions = MAGNITUDE_VALUES.map((val) => {
+    if (!val) return { value: '', label: m.list.allOption };
+    return {
+      value: val,
+      label:
+        lang === 'en'
+          ? `M${val}.0+`
+          : lang === 'ko'
+          ? `M${val}.0 이상`
+          : `M${val}.0以上`,
+    };
+  });
+
   const filterTabs: Array<{ id: QuakeFilter; label: string; count: number }> = [
-    { id: 'all', label: 'すべて', count: counts.all },
-    { id: 'quake', label: '地震', count: counts.quake },
-    { id: 'eew', label: '速報', count: counts.eew },
-    { id: 'other', label: 'その他', count: counts.other },
+    { id: 'all', label: m.list.tabAll, count: counts.all },
+    { id: 'quake', label: m.list.tabQuake, count: counts.quake },
+    { id: 'eew', label: m.list.tabEew, count: counts.eew },
+    { id: 'other', label: m.list.tabOther, count: counts.other },
   ];
+
+  const archiveHeadingText = archiveDate
+    ? lang === 'ja'
+      ? formatJapaneseDateHeading(archiveDate)
+      : formatDisplayYmd(archiveDate)
+    : '';
 
   return (
     <aside
-      aria-label="地震情報一覧"
+      aria-label={m.list.historyHeading}
       className="flex w-full flex-col rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] transition-colors lg:w-[440px] lg:shrink-0"
     >
       <div className="border-b border-[var(--nein-border)] p-4 space-y-3">
@@ -189,8 +212,8 @@ export function QuakeList({
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {archiveDate
-                ? `過去データ：${formatJapaneseDateHeading(archiveDate)}`
-                : '地震・防災履歴（新着・過去）'}
+                ? `${m.list.archiveHeadingPrefix}${archiveHeadingText}`
+                : m.list.historyHeading}
             </h2>
           </div>
 
@@ -200,8 +223,8 @@ export function QuakeList({
               className="font-mono text-xs tabular-nums text-slate-600 dark:text-slate-400"
             >
               {records.length !== totalCount
-                ? `${records.length} / ${totalCount}件`
-                : `${records.length}件表示`}
+                ? `${records.length} / ${totalCount}`
+                : `${records.length} ${m.list.itemsShownSuffix}`}
             </span>
             <button
               type="button"
@@ -215,7 +238,7 @@ export function QuakeList({
               }`}
             >
               <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{archiveDate ? '日付変更' : '日付指定'}</span>
+              <span>{archiveDate ? m.list.changeDate : m.list.pickDate}</span>
             </button>
           </div>
         </div>
@@ -223,7 +246,7 @@ export function QuakeList({
         {archiveDate && (
           <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-3 py-1.5 text-xs">
             <span className="text-[var(--nein-accent-text)] font-medium">
-              アーカイブ閲覧中（JMA地震・津波）
+              {m.list.archiveBanner}
             </span>
             <button
               type="button"
@@ -232,13 +255,14 @@ export function QuakeList({
               className="inline-flex items-center gap-1 font-semibold text-[var(--nein-accent-text)] hover:underline cursor-pointer"
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
-              <span>リアルタイムに戻る</span>
+              <span>{m.list.backToRealtime}</span>
             </button>
           </div>
         )}
 
         {calendarOpen && (
           <ArchiveCalendar
+            lang={lang}
             selectedDate={archiveDate}
             onSelectDate={onSelectArchiveDate}
             onExitArchive={onExitArchiveMode}
@@ -248,7 +272,7 @@ export function QuakeList({
 
         <div className="relative">
           <label htmlFor="quake-search-input" className="sr-only">
-            震源地や地域名で検索
+            {m.list.searchPlaceholder}
           </label>
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
@@ -259,14 +283,14 @@ export function QuakeList({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="震源地・都道府県・市区町村で検索"
+            placeholder={m.list.searchPlaceholder}
             className="w-full rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] py-2 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[var(--nein-accent)] focus:outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              aria-label="キーワード検索をクリア"
+              aria-label={m.list.clearSearchAria}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -276,7 +300,7 @@ export function QuakeList({
 
         {/* Multi-criteria Search Controls: Date Range, Max Intensity, Magnitude */}
         <div
-          aria-label="詳細検索フィルター"
+          aria-label={m.list.maxScale}
           className="grid grid-cols-2 gap-2 rounded-md border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] p-2.5"
         >
           <div className="min-w-0">
@@ -284,7 +308,7 @@ export function QuakeList({
               htmlFor="quake-date-from"
               className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400"
             >
-              開始日
+              {m.list.dateFrom}
             </label>
             <input
               id="quake-date-from"
@@ -301,7 +325,7 @@ export function QuakeList({
               htmlFor="quake-date-to"
               className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400"
             >
-              終了日
+              {m.list.dateTo}
             </label>
             <input
               id="quake-date-to"
@@ -318,7 +342,7 @@ export function QuakeList({
               htmlFor="quake-min-scale"
               className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400"
             >
-              最大震度
+              {m.list.maxScale}
             </label>
             <select
               id="quake-min-scale"
@@ -326,7 +350,7 @@ export function QuakeList({
               onChange={(e) => onMinScaleChange(Number(e.target.value))}
               className="w-full rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-[11px] text-slate-900 focus:border-[var(--nein-accent)] focus:outline-none dark:text-slate-200 cursor-pointer"
             >
-              {SCALE_OPTIONS.map((opt) => (
+              {scaleOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -339,7 +363,7 @@ export function QuakeList({
               htmlFor="quake-min-magnitude"
               className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400"
             >
-              マグニチュード
+              {m.list.magnitude}
             </label>
             <select
               id="quake-min-magnitude"
@@ -349,7 +373,7 @@ export function QuakeList({
               }
               className="w-full rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 font-mono text-[11px] text-slate-900 focus:border-[var(--nein-accent)] focus:outline-none dark:text-slate-200 cursor-pointer"
             >
-              {MAGNITUDE_OPTIONS.map((opt) => (
+              {magOptions.map((opt) => (
                 <option key={opt.label} value={opt.value}>
                   {opt.label}
                 </option>
@@ -360,7 +384,7 @@ export function QuakeList({
           {hasActiveFilters && (
             <div className="col-span-2 flex items-center justify-between border-t border-[var(--nein-border-subtle)] pt-2 text-[11px]">
               <span className="font-mono tabular-nums font-semibold text-[var(--nein-accent-text)]">
-                一致: {records.length}件
+                {m.list.matchedPrefix}{records.length}
               </span>
               <button
                 type="button"
@@ -369,7 +393,7 @@ export function QuakeList({
                 className="inline-flex items-center gap-1 rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200/70 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                <span>条件リセット</span>
+                <span>{m.list.resetFilters}</span>
               </button>
             </div>
           )}
@@ -377,7 +401,7 @@ export function QuakeList({
 
         <div
           role="tablist"
-          aria-label="情報種別フィルター"
+          aria-label={m.nav.navAria}
           className="grid grid-cols-4 gap-1 rounded-md border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] p-1"
         >
           {filterTabs.map((tab) => {
@@ -407,7 +431,7 @@ export function QuakeList({
 
       <div className="max-h-[620px] overflow-y-auto divide-y divide-[var(--nein-border-subtle)]">
         {isLoading ? (
-          <div className="space-y-3 p-4" aria-label="地震情報を読み込み中">
+          <div className="space-y-3 p-4" aria-label={m.toolbar.refreshing}>
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
@@ -425,13 +449,11 @@ export function QuakeList({
           <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
             <p className="text-sm font-medium text-slate-800 dark:text-slate-300">
               {archiveDate
-                ? `${formatJapaneseDateHeading(archiveDate)}の記録はありません`
-                : '該当する情報はありません'}
+                ? `${archiveHeadingText}${m.list.emptyArchive}`
+                : m.list.emptyFiltered}
             </p>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-500">
-              {archiveDate
-                ? '別の日付を選択するか、リアルタイム表示に戻してください。'
-                : '別の検索条件や日付範囲をお試しください。'}
+              {archiveDate ? m.list.emptyArchiveHint : m.list.emptyFilteredHint}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               {archiveDate && (
@@ -440,7 +462,7 @@ export function QuakeList({
                   onClick={onExitArchiveMode}
                   className="rounded-md border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-3.5 py-2 text-xs font-medium text-[var(--nein-accent-text)] hover:opacity-85 cursor-pointer"
                 >
-                  リアルタイムに戻る
+                  {m.list.backToRealtime}
                 </button>
               )}
               {hasActiveFilters && (
@@ -449,7 +471,7 @@ export function QuakeList({
                   onClick={onResetFilters}
                   className="rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3.5 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/70 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
                 >
-                  すべて表示に戻す
+                  {m.list.showAll}
                 </button>
               )}
             </div>
@@ -459,17 +481,18 @@ export function QuakeList({
             <ul data-testid="quake-list" className="divide-y divide-[var(--nein-border-subtle)]">
               {records.map((record, idx) => {
                 const isSelected = record.id === selectedId;
-                const title = getRecordTitle(record);
-                const category = getRecordCategoryLabel(record);
+                const title = getRecordTitle(record, lang);
+                const category = getRecordCategoryLabel(record, lang);
                 const isCopied = copiedRowId === record.id;
 
                 let metaSummary = formatShortTime(
                   record.code === 551 ? record.earthquake.time : record.time
                 );
                 if (record.code === 551) {
-                  metaSummary += ` · ${formatMagnitude(record.earthquake.hypocenter.magnitude)} · ${formatDepth(record.earthquake.hypocenter.depth)}`;
+                  metaSummary += ` · ${formatMagnitude(record.earthquake.hypocenter.magnitude, lang)} · ${formatDepth(record.earthquake.hypocenter.depth, lang)}`;
                 } else if (record.code === 556 && record.earthquake) {
-                  metaSummary += ` · 第${record.issue.serial}報 · ${formatMagnitude(record.earthquake.hypocenter.magnitude)}`;
+                  const repPrefix = lang === 'en' ? `#${record.issue.serial}` : `第${record.issue.serial}報`;
+                  metaSummary += ` · ${repPrefix} · ${formatMagnitude(record.earthquake.hypocenter.magnitude, lang)}`;
                 } else {
                   metaSummary += ` · ${category}`;
                 }
@@ -490,7 +513,7 @@ export function QuakeList({
                       aria-label={`${title} ${metaSummary}`}
                       className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nein-accent)]"
                     >
-                      <ScaleSquare record={record} />
+                      <ScaleSquare record={record} lang={lang} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span
@@ -504,7 +527,7 @@ export function QuakeList({
                           </span>
                           {record.isTest && (
                             <span className="shrink-0 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                              テスト
+                              {m.list.testTag}
                             </span>
                           )}
                         </div>
@@ -518,8 +541,8 @@ export function QuakeList({
                       <button
                         type="button"
                         onClick={() => void handleRowCopy(record)}
-                        aria-label={`${title} をコピー`}
-                        title="この地震情報をコピー"
+                        aria-label={`${m.list.copyRowAria}${title}`}
+                        title={m.detail.copyQuake}
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-md border text-xs transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--nein-accent)] ${
                           isCopied
                             ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
@@ -551,18 +574,19 @@ export function QuakeList({
                     {isLoadingMore ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                        <span>過去の履歴を読み込み中...</span>
+                        <span>{m.list.loadingMore}</span>
                       </>
                     ) : (
                       <>
                         <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>さらに過去の履歴を読み込む（+100件）</span>
+                        <span>{m.list.loadMore}</span>
                       </>
                     )}
                   </button>
                 ) : (
                   <p className="text-center font-mono text-[11px] tabular-nums text-slate-500">
-                    取得可能な履歴を読み込み済み（計 {totalCount}件）
+                    {m.list.loadedTotalPrefix}{totalCount}
+                    {lang === 'ja' ? '件）' : ')'}
                   </p>
                 )}
               </div>
