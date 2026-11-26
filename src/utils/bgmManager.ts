@@ -401,7 +401,10 @@ export function createLocalMediaBgmTrack(file: {
 function isSafeEmbedUrl(source: BgmSourceType, embedUrl?: string): boolean {
   if (!embedUrl) return false;
   if (source === 'youtube') {
-    return embedUrl.startsWith('https://www.youtube.com/embed');
+    return (
+      embedUrl.startsWith('https://www.youtube.com/embed') ||
+      embedUrl.startsWith('https://www.youtube-nocookie.com/embed')
+    );
   }
   if (source === 'spotify') {
     return embedUrl.startsWith('https://open.spotify.com/embed/');
@@ -409,7 +412,26 @@ function isSafeEmbedUrl(source: BgmSourceType, embedUrl?: string): boolean {
   return false;
 }
 
-function sanitizeCustomTrack(raw: unknown): BgmTrack | null {
+function extractYoutubeVideoIdFromAnyUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    const vParam = parsed.searchParams.get('v');
+    if (vParam && YOUTUBE_ID_RE.test(vParam)) return vParam;
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    if (segments.length >= 2 && ['embed', 'shorts', 'live', 'v'].includes(segments[0]) && YOUTUBE_ID_RE.test(segments[1])) {
+      return segments[1];
+    }
+    if (parsed.hostname.toLowerCase() === 'youtu.be' && segments[0] && YOUTUBE_ID_RE.test(segments[0])) {
+      return segments[0];
+    }
+  } catch {
+    // Ignore invalid URL
+  }
+  return undefined;
+}
+
+export function sanitizeCustomTrack(raw: unknown): BgmTrack | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const id = typeof r.id === 'string' && r.id.trim() ? r.id.trim() : null;
@@ -423,18 +445,56 @@ function sanitizeCustomTrack(raw: unknown): BgmTrack | null {
     return null;
   }
 
-  if (source === 'youtube' || source === 'spotify') {
-    const embedUrl = typeof r.embedUrl === 'string' ? r.embedUrl : undefined;
-    if (!isSafeEmbedUrl(source, embedUrl)) return null;
+  if (source === 'youtube') {
+    const rawEmbedUrl = typeof r.embedUrl === 'string' ? r.embedUrl : undefined;
+    const rawOriginalUrl = typeof r.originalUrl === 'string' ? r.originalUrl : undefined;
+    const rawVideoId =
+      typeof r.youtubeVideoId === 'string' && YOUTUBE_ID_RE.test(r.youtubeVideoId)
+        ? r.youtubeVideoId
+        : extractYoutubeVideoIdFromAnyUrl(rawEmbedUrl) ?? extractYoutubeVideoIdFromAnyUrl(rawOriginalUrl);
+    const rawPlaylistId = typeof r.youtubePlaylistId === 'string' ? r.youtubePlaylistId : undefined;
+    const cleanPlaylistId = isEmbeddableYoutubePlaylistId(rawPlaylistId) ? rawPlaylistId : undefined;
+
+    // Self-heal legacy persisted YouTube tracks (strips RD* mixes, autoplay=1, and youtube-nocookie)
+    const rebuiltEmbedUrl = buildYoutubeEmbedUrl(rawVideoId, cleanPlaylistId, {
+      autoplay: false,
+      loop: true,
+    });
+    const finalEmbedUrl =
+      rebuiltEmbedUrl || (isSafeEmbedUrl('youtube', rawEmbedUrl) ? rawEmbedUrl : undefined);
+    if (!finalEmbedUrl) return null;
+
+    const cleanOriginalUrl =
+      rawOriginalUrl ||
+      (rawVideoId
+        ? `https://www.youtube.com/watch?v=${rawVideoId}`
+        : cleanPlaylistId
+          ? `https://www.youtube.com/playlist?list=${cleanPlaylistId}`
+          : undefined);
+
     return {
       id,
       title,
       subtitle: typeof r.subtitle === 'string' ? r.subtitle : undefined,
-      source,
+      source: 'youtube',
+      originalUrl: cleanOriginalUrl,
+      embedUrl: finalEmbedUrl,
+      youtubeVideoId: rawVideoId,
+      youtubePlaylistId: cleanPlaylistId,
+      addedAt: typeof r.addedAt === 'string' ? r.addedAt : undefined,
+    };
+  }
+
+  if (source === 'spotify') {
+    const embedUrl = typeof r.embedUrl === 'string' ? r.embedUrl : undefined;
+    if (!isSafeEmbedUrl('spotify', embedUrl)) return null;
+    return {
+      id,
+      title,
+      subtitle: typeof r.subtitle === 'string' ? r.subtitle : undefined,
+      source: 'spotify',
       originalUrl: typeof r.originalUrl === 'string' ? r.originalUrl : undefined,
       embedUrl,
-      youtubeVideoId: typeof r.youtubeVideoId === 'string' ? r.youtubeVideoId : undefined,
-      youtubePlaylistId: typeof r.youtubePlaylistId === 'string' ? r.youtubePlaylistId : undefined,
       spotifyKind:
         typeof r.spotifyKind === 'string' && SPOTIFY_KINDS.has(r.spotifyKind)
           ? (r.spotifyKind as SpotifyMediaKind)
@@ -495,9 +555,10 @@ export function saveBgmSettings(settings: BgmSettings): void {
   }
 }
 
-// IndexedDB persistence for local .mp3 / .mp4 files
+// IndexedDB persistence + in-memory session fallback for local .mp3 / .mp4 files
 const BGM_DB_NAME = 'nein_bgm_media_db';
 const BGM_DB_STORE = 'files';
+const memoryBlobCache = new Map<string, Blob>();
 
 function openBgmMediaDb(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
@@ -519,21 +580,24 @@ function openBgmMediaDb(): Promise<IDBDatabase | null> {
 }
 
 export async function saveBgmMediaBlob(trackId: string, blob: Blob): Promise<boolean> {
+  memoryBlobCache.set(trackId, blob);
   const db = await openBgmMediaDb();
-  if (!db) return false;
+  if (!db) return true;
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(BGM_DB_STORE, 'readwrite');
       tx.objectStore(BGM_DB_STORE).put(blob, trackId);
       tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      tx.onerror = () => resolve(true);
     } catch {
-      resolve(false);
+      resolve(true);
     }
   });
 }
 
 export async function loadBgmMediaBlob(trackId: string): Promise<Blob | null> {
+  const cached = memoryBlobCache.get(trackId);
+  if (cached) return cached;
   const db = await openBgmMediaDb();
   if (!db) return null;
   return new Promise((resolve) => {
@@ -541,7 +605,11 @@ export async function loadBgmMediaBlob(trackId: string): Promise<Blob | null> {
       const tx = db.transaction(BGM_DB_STORE, 'readonly');
       const req = tx.objectStore(BGM_DB_STORE).get(trackId);
       req.onsuccess = () => {
-        resolve(req.result instanceof Blob ? req.result : null);
+        const result = req.result instanceof Blob ? req.result : null;
+        if (result) {
+          memoryBlobCache.set(trackId, result);
+        }
+        resolve(result);
       };
       req.onerror = () => resolve(null);
     } catch {
@@ -551,6 +619,7 @@ export async function loadBgmMediaBlob(trackId: string): Promise<Blob | null> {
 }
 
 export async function deleteBgmMediaBlob(trackId: string): Promise<void> {
+  memoryBlobCache.delete(trackId);
   const db = await openBgmMediaDb();
   if (!db) return;
   await new Promise<void>((resolve) => {

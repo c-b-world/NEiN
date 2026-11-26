@@ -7,11 +7,15 @@ import {
   buildYoutubeEmbedUrl,
   clampBgmVolume,
   createLocalMediaBgmTrack,
+  deleteBgmMediaBlob,
   getAllBgmTracks,
   getYoutubePlayerErrorCodeHint,
   isEmbeddableYoutubePlaylistId,
+  loadBgmMediaBlob,
   parseExternalBgmUrl,
   resolveSelectedBgmTrack,
+  sanitizeCustomTrack,
+  saveBgmMediaBlob,
   validateBgmMediaFile,
 } from './bgmManager';
 
@@ -134,6 +138,34 @@ test('validateBgmMediaFile & createLocalMediaBgmTrack accept .mp3 and .mp4 and r
   assert.equal(track?.source, 'mp3');
   assert.equal(track?.title, 'rain_loop');
   assert.equal(track?.subtitle, 'MP3 · 2.5 MB');
+});
+
+test('sanitizeCustomTrack self-heals legacy persisted YouTube tracks with autoplay=1, nocookie, or RD mix lists', () => {
+  const healed = sanitizeCustomTrack({
+    id: 'yt-legacy',
+    title: 'Legacy YouTube',
+    source: 'youtube',
+    embedUrl:
+      'https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ?autoplay=1&loop=1&playlist=RDaqz-KE-bpKQ',
+    youtubePlaylistId: 'RDaqz-KE-bpKQ',
+  });
+  assert.ok(healed);
+  assert.equal(healed?.youtubeVideoId, 'aqz-KE-bpKQ');
+  assert.equal(healed?.youtubePlaylistId, undefined);
+  assert.ok(healed?.embedUrl?.startsWith('https://www.youtube.com/embed/aqz-KE-bpKQ?'));
+  assert.ok(!healed?.embedUrl?.includes('autoplay=1'));
+  assert.ok(!healed?.embedUrl?.includes('RDaqz-KE-bpKQ'));
+});
+
+test('media blob storage falls back to in-memory session cache when IndexedDB is unavailable', async () => {
+  const blob = new Blob(['dummy-audio-data'], { type: 'audio/mpeg' });
+  const saved = await saveBgmMediaBlob('mp3-mem-test', blob);
+  assert.equal(saved, true);
+  const loaded = await loadBgmMediaBlob('mp3-mem-test');
+  assert.ok(loaded);
+  assert.equal(loaded?.size, blob.size);
+  await deleteBgmMediaBlob('mp3-mem-test');
+  assert.equal(await loadBgmMediaBlob('mp3-mem-test'), null);
 });
 
 test('clampBgmVolume & resolveSelectedBgmTrack enforce safe defaults', () => {

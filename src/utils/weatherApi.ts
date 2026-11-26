@@ -561,11 +561,21 @@ export async function hydrateRegionOverviewOffices(
 ): Promise<PrefectureOverviewRow[]> {
   const { forceRefresh = false, maxConcurrency = 3, signal, onProgress } = options;
 
+  const amedasStart = Date.now();
   const [amedasSnapshot, areaNameMap, systemControlDatetimeIso] = await Promise.all([
     fetchAmedasMapSnapshot(forceRefresh).catch(() => null),
     fetchJmaAreaNameMap(false),
     fetchJmaWarningSystemTime(forceRefresh),
   ]);
+
+  if (amedasSnapshot) {
+    setSourceStatus('jma_amedas', 'normal', {
+      lastFetchedAt: amedasSnapshot.fetchedAt,
+      publishedAt: amedasSnapshot.observedAtIso,
+      latencyMs: Date.now() - amedasStart,
+      errorMessage: null,
+    });
+  }
 
   const emitSnapshot = () => {
     const rows = offices.map((office) =>
@@ -580,16 +590,23 @@ export async function hydrateRegionOverviewOffices(
 
   const queue = [...offices];
   const workerCount = Math.min(maxConcurrency, queue.length);
+  let forecastWarningSuccessCount = 0;
+  let forecastWarningAttemptCount = 0;
+  const forecastStart = Date.now();
 
   const workers = Array.from({ length: workerCount }, async () => {
     while (queue.length > 0) {
       if (signal?.aborted) return;
       const office = queue.shift();
       if (!office) return;
-      await Promise.allSettled([
+      forecastWarningAttemptCount += 1;
+      const [fRes, wRes] = await Promise.allSettled([
         fetchJmaForecastRaw(office.officeCode, forceRefresh),
         fetchJmaWarningRaw(office.officeCode, forceRefresh),
       ]);
+      if (fRes.status === 'fulfilled' || wRes.status === 'fulfilled') {
+        forecastWarningSuccessCount += 1;
+      }
       if (!signal?.aborted) {
         emitSnapshot();
       }
@@ -597,6 +614,23 @@ export async function hydrateRegionOverviewOffices(
   });
 
   await Promise.all(workers);
+
+  if (!signal?.aborted && forecastWarningAttemptCount > 0) {
+    if (forecastWarningSuccessCount > 0) {
+      setSourceStatus('jma_forecast_warning', 'normal', {
+        lastFetchedAt: new Date(),
+        publishedAt: systemControlDatetimeIso,
+        latencyMs: Date.now() - forecastStart,
+        errorMessage: null,
+      });
+    } else {
+      setSourceStatus('jma_forecast_warning', 'fetch_failed', {
+        lastFetchedAt: new Date(),
+        errorMessage: '天気予報・警報JSONの取得に失敗しました',
+      });
+    }
+  }
+
   return emitSnapshot();
 }
 

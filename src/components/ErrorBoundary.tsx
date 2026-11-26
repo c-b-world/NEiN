@@ -1,5 +1,6 @@
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { BGM_SETTINGS_STORAGE_KEY } from '../utils/bgmManager';
 import {
   BACKGROUND_MOTION_STORAGE_KEY,
   COLOR_THEME_STORAGE_KEY,
@@ -41,6 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       window.localStorage.removeItem(THEME_MODE_STORAGE_KEY);
       window.localStorage.removeItem(COLOR_THEME_STORAGE_KEY);
       window.localStorage.removeItem(BACKGROUND_MOTION_STORAGE_KEY);
+      window.localStorage.removeItem(BGM_SETTINGS_STORAGE_KEY);
     } catch {
       // Ignore storage errors
     }

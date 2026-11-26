@@ -97,7 +97,7 @@ function loadYoutubeIframeApi(): Promise<YTGlobal | null> {
 
     const timeoutId = window.setTimeout(() => {
       finish(win.YT?.Player ? win.YT : null);
-    }, 10_000);
+    }, 3_000);
 
     const prevReady = win.onYouTubeIframeAPIReady;
     win.onYouTubeIframeAPIReady = () => {
@@ -134,6 +134,7 @@ const DOCK_COPY: Record<
     playing: string;
     paused: string;
     ready: string;
+    buffering: string;
     looping: string;
     tapToResume: string;
     playBtn: string;
@@ -157,6 +158,7 @@ const DOCK_COPY: Record<
     playing: 'BGM再生中',
     paused: '一時停止中',
     ready: '再生準備完了',
+    buffering: '読み込み中...',
     looping: 'ループ',
     tapToResume: 'クリックして再生開始',
     playBtn: '再生',
@@ -180,6 +182,7 @@ const DOCK_COPY: Record<
     playing: 'BGM Playing',
     paused: 'Paused',
     ready: 'Ready to play',
+    buffering: 'Buffering...',
     looping: 'Loop',
     tapToResume: 'Click to start audio',
     playBtn: 'Play',
@@ -203,6 +206,7 @@ const DOCK_COPY: Record<
     playing: 'BGM播放中',
     paused: '已暂停',
     ready: '准备就绪',
+    buffering: '缓冲中...',
     looping: '循环',
     tapToResume: '点击开始播放',
     playBtn: '播放',
@@ -225,6 +229,7 @@ const DOCK_COPY: Record<
     playing: 'BGM 재생 중',
     paused: '일시정지',
     ready: '재생 준비됨',
+    buffering: '버퍼링 중...',
     looping: '반복',
     tapToResume: '클릭하여 재생 시작',
     playBtn: '재생',
@@ -425,7 +430,8 @@ export function BgmPlayerEngine({
   const [localMediaError, setLocalMediaError] = useState(false);
 
   // YouTube IFrame Player API state
-  const [ytStatus, setYtStatus] = useState<'loading' | 'ready' | 'playing' | 'paused' | 'error'>('loading');
+  const [ytStatus, setYtStatus] = useState<'loading' | 'ready' | 'buffering' | 'playing' | 'paused' | 'error'>('loading');
+  const [ytPlayerReady, setYtPlayerReady] = useState(false);
   const [ytErrorCode, setYtErrorCode] = useState<number | null>(null);
 
   const synthRef = useRef<AmbientSynthNodes | null>(null);
@@ -433,6 +439,7 @@ export function BgmPlayerEngine({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ytContainerRef = useRef<HTMLDivElement | null>(null);
   const ytPlayerRef = useRef<YTPlayerInstance | null>(null);
+  const ytReadyRef = useRef(false);
   const loopRef = useRef(settings.loop);
   const volumeRef = useRef(effectiveVolume);
 
@@ -596,18 +603,22 @@ export function BgmPlayerEngine({
 
   // 3. Official YouTube IFrame Player API bound to a pre-configured <iframe>
   // Creating the <iframe> with referrerPolicy="strict-origin-when-cross-origin" + origin
-  // BEFORE navigation prevents YouTube Error 153 and keeps playback working immediately.
+  // AFTER YT API resolves ensures YT.Player attaches before the iframe handshake completes,
+  // avoiding YouTube Error 153 and missed onReady/onStateChange callbacks.
+  // Keep loop decoupled from URL so toggling Loop never reloads the playing video.
   const youtubeEmbedSrc =
     settings.enabled && activeTrack.source === 'youtube'
       ? buildYoutubeEmbedUrl(activeTrack.youtubeVideoId, activeTrack.youtubePlaylistId, {
           autoplay: false,
-          loop: settings.loop,
+          loop: true,
         }) || activeTrack.embedUrl || ''
       : '';
 
   useEffect(() => {
     const isYoutubeActive = settings.enabled && activeTrack.source === 'youtube' && Boolean(youtubeEmbedSrc);
     if (!isYoutubeActive) {
+      ytReadyRef.current = false;
+      setYtPlayerReady(false);
       if (ytPlayerRef.current) {
         try {
           ytPlayerRef.current.destroy();
@@ -622,6 +633,8 @@ export function BgmPlayerEngine({
     }
 
     let cancelled = false;
+    ytReadyRef.current = false;
+    setYtPlayerReady(false);
     setYtStatus('ready');
     setYtErrorCode(null);
 
@@ -629,29 +642,34 @@ export function BgmPlayerEngine({
     if (!mountHost) return;
     mountHost.innerHTML = '';
 
-    const iframe = document.createElement('iframe');
-    iframe.id = `nein-yt-player-${activeTrack.id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
-    iframe.title = activeTrack.title;
-    iframe.width = '100%';
-    iframe.height = '180';
-    iframe.className = 'h-[180px] w-full border-0';
-    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    iframe.setAttribute('data-testid', 'bgm-youtube-embed-iframe');
-    iframe.setAttribute(
-      'allow',
-      'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-    );
-    iframe.allowFullscreen = true;
-    iframe.src = youtubeEmbedSrc;
-    mountHost.appendChild(iframe);
-
     void loadYoutubeIframeApi().then((YT) => {
-      if (cancelled || !YT?.Player) return;
+      if (cancelled || !mountHost) return;
+      mountHost.innerHTML = '';
+
+      const iframe = document.createElement('iframe');
+      iframe.id = `nein-yt-player-${activeTrack.id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+      iframe.title = activeTrack.title;
+      iframe.width = '100%';
+      iframe.height = '180';
+      iframe.className = 'h-[180px] w-full border-0';
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.setAttribute('data-testid', 'bgm-youtube-embed-iframe');
+      iframe.setAttribute(
+        'allow',
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+      );
+      iframe.allowFullscreen = true;
+      iframe.src = youtubeEmbedSrc;
+      mountHost.appendChild(iframe);
+
+      if (!YT?.Player) return;
       try {
         const player = new YT.Player(iframe, {
           events: {
             onReady: (ev) => {
               if (cancelled) return;
+              ytReadyRef.current = true;
+              setYtPlayerReady(true);
               setYtStatus('ready');
               try {
                 if (volumeRef.current === 0) {
@@ -683,6 +701,8 @@ export function BgmPlayerEngine({
                 setYtErrorCode(null);
               } else if (ev.data === 2) {
                 setYtStatus('paused');
+              } else if (ev.data === 3) {
+                setYtStatus('buffering');
               }
             },
             onError: (ev) => {
@@ -700,6 +720,8 @@ export function BgmPlayerEngine({
 
     return () => {
       cancelled = true;
+      ytReadyRef.current = false;
+      setYtPlayerReady(false);
       if (ytPlayerRef.current) {
         try {
           ytPlayerRef.current.destroy();
@@ -723,13 +745,13 @@ export function BgmPlayerEngine({
   // Live volume & mute sync for active YT.Player
   useEffect(() => {
     const player = ytPlayerRef.current;
-    if (!player || !settings.enabled || activeTrack.source !== 'youtube') return;
+    if (!player || !ytReadyRef.current || !settings.enabled || activeTrack.source !== 'youtube') return;
     try {
       if (effectiveVolume === 0) {
-        player.mute();
+        if (typeof player.mute === 'function') player.mute();
       } else {
-        player.unMute();
-        player.setVolume(effectiveVolume);
+        if (typeof player.unMute === 'function') player.unMute();
+        if (typeof player.setVolume === 'function') player.setVolume(effectiveVolume);
       }
     } catch {
       // Player may still be initializing
@@ -738,18 +760,18 @@ export function BgmPlayerEngine({
 
   const handleToggleYoutubePlayPause = () => {
     const player = ytPlayerRef.current;
-    if (!player) return;
+    if (!player || !ytReadyRef.current) return;
     try {
       if (ytStatus === 'playing') {
-        player.pauseVideo();
+        if (typeof player.pauseVideo === 'function') player.pauseVideo();
       } else {
         if (effectiveVolume === 0) {
-          player.mute();
+          if (typeof player.mute === 'function') player.mute();
         } else {
-          player.unMute();
-          player.setVolume(effectiveVolume);
+          if (typeof player.unMute === 'function') player.unMute();
+          if (typeof player.setVolume === 'function') player.setVolume(effectiveVolume);
         }
-        player.playVideo();
+        if (typeof player.playVideo === 'function') player.playVideo();
       }
     } catch {
       // Ignore
@@ -796,9 +818,11 @@ export function BgmPlayerEngine({
     activeTrack.source === 'youtube'
       ? ytStatus === 'playing'
         ? copy.playing
-        : ytStatus === 'paused'
-          ? copy.paused
-          : copy.ready
+        : ytStatus === 'buffering'
+          ? copy.buffering
+          : ytStatus === 'paused'
+            ? copy.paused
+            : copy.ready
       : copy.playing;
 
   return (
@@ -864,7 +888,7 @@ export function BgmPlayerEngine({
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
-              {activeTrack.source === 'youtube' && ytStatus !== 'error' && (
+              {activeTrack.source === 'youtube' && ytPlayerReady && ytStatus !== 'error' && (
                 <button
                   type="button"
                   data-testid="bgm-yt-playpause-btn"
