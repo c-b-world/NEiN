@@ -3,26 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  Activity,
-  AlertCircle,
-  CloudRain,
-  CloudSun,
-  Flame,
-  History,
-  Layers,
-  LayoutDashboard,
-  Map as MapIcon,
-  Radar,
-  ServerCrash,
-  Settings,
-  Sun,
-  Waves,
-  Wind,
-} from 'lucide-react';
+import { AlertCircle, ChevronDown, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EEWWarningModal } from './components/EEWWarningModal';
-import { Header, type AppViewMode } from './components/Header';
+import {
+  Header,
+  NAV_GROUPS,
+  type AppViewMode,
+  type NavGroupId,
+  isGroupActive,
+} from './components/Header';
 import { InAppToastContainer } from './components/InAppToastContainer';
 import { QuakeDetailPanel } from './components/QuakeDetailPanel';
 import { QuakeList } from './components/QuakeList';
@@ -32,7 +22,8 @@ import { WorkspaceToolbar } from './components/WorkspaceToolbar';
 import { ComprehensiveDashboard } from './components/dashboard/ComprehensiveDashboard';
 import { NationalDisasterMap } from './components/map/NationalDisasterMap';
 import { QuakeExtendedPanel } from './components/quake/QuakeExtendedPanel';
-import { DisasterTimelineView } from './components/system/DisasterTimelineView';
+import { RealtimeMonitorView } from './components/system/RealtimeMonitorView';
+import { ReplayArchiveView } from './components/system/ReplayArchiveView';
 import { SystemStatusPanel } from './components/system/SystemStatusPanel';
 import { DisasterHazardsView } from './components/weather/DisasterHazardsView';
 import { EnvironmentView } from './components/weather/EnvironmentView';
@@ -113,6 +104,7 @@ export default function App() {
   } = useQuakeFeed();
 
   const [activeView, setActiveView] = useState<AppViewMode>('dashboard');
+  const [mobileOpenGroup, setMobileOpenGroup] = useState<NavGroupId | null>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
@@ -180,28 +172,6 @@ export default function App() {
     { id: 'other', label: m.list.tabOther },
   ];
 
-  const mobileNavTabs: Array<{
-    view: AppViewMode;
-    label: string;
-    testId?: string;
-    icon: typeof LayoutDashboard;
-  }> = [
-    { view: 'dashboard', label: ext.extNav.dashboard, icon: LayoutDashboard },
-    { view: 'quake', label: m.nav.quack, testId: 'mobile-nav-nein-quack', icon: Layers },
-    { view: 'jma_quake', label: 'JMA', icon: Activity },
-    { view: 'tsunami', label: ext.extNav.tsunamiMonitor, icon: Waves },
-    { view: 'weather', label: m.nav.weather, icon: CloudSun },
-    { view: 'radar', label: ext.extNav.radarSatellite, icon: Radar },
-    { view: 'map', label: ext.extNav.integratedMap, icon: MapIcon },
-    { view: 'typhoon', label: ext.extNav.typhoonMarine, icon: Wind },
-    { view: 'hazards', label: ext.extNav.hazardsFlood, icon: CloudRain },
-    { view: 'volcano', label: ext.extNav.volcano, icon: Flame },
-    { view: 'environment', label: ext.extNav.environment, icon: Sun },
-    { view: 'timeline', label: ext.extNav.timeline, icon: History },
-    { view: 'status', label: ext.extNav.systemStatus, icon: ServerCrash },
-    { view: 'settings', label: m.nav.settings, testId: 'mobile-nav-system-settings', icon: Settings },
-  ];
-
   return (
     <div
       id="top"
@@ -210,45 +180,120 @@ export default function App() {
       <Header
         lang={lang}
         activeView={activeView}
-        activeFilter={filter}
-        onSelectView={setActiveView}
-        onSelectFilter={handleSelectQuakeFilter}
+        onSelectView={(v) => {
+          setActiveView(v);
+          setMobileOpenGroup(null);
+        }}
         onOpenTestModal={() => setIsTestModalOpen(true)}
       />
 
-      {/* Mobile View Switcher (visible < md, overflow-x contained cleanly) */}
-      <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3 py-2 md:hidden">
+      {/* Mobile Grouped Navigation (< md) matching HOME / QUAKE ▾ / WEATHER ▾ / DISASTER ▾ / TOOLS ▾ / ⚙ */}
+      <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3.5 py-2.5 md:hidden">
         <div
           role="tablist"
           aria-label={m.nav.mobileModeSwitcher}
-          className="flex items-center gap-1.5 overflow-x-auto pb-1"
+          className="flex flex-wrap items-center gap-1.5"
         >
-          {mobileNavTabs.map((tab) => {
-            const Icon = tab.icon;
-            const selected = activeView === tab.view;
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'dashboard'}
+            onClick={() => {
+              setActiveView('dashboard');
+              setMobileOpenGroup(null);
+            }}
+            className={`rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
+              activeView === 'dashboard'
+                ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
+            }`}
+          >
+            HOME
+          </button>
+
+          {NAV_GROUPS.map((group) => {
+            const active = isGroupActive(group, activeView);
+            const expanded = mobileOpenGroup === group.id;
             return (
               <button
-                key={tab.view}
+                key={group.id}
                 type="button"
                 role="tab"
-                data-testid={tab.testId}
-                aria-selected={selected}
-                onClick={() => setActiveView(tab.view)}
-                className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
-                  selected
+                data-testid={group.id === 'quake' ? 'mobile-nav-nein-quack' : undefined}
+                aria-selected={active}
+                aria-expanded={expanded}
+                onClick={() =>
+                  setMobileOpenGroup((prev) => (prev === group.id ? null : group.id))
+                }
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-bold tracking-wide transition-colors cursor-pointer ${
+                  active || expanded
                     ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
-                    : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
+                    : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{tab.label}</span>
+                <span>{group.title}</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
               </button>
             );
           })}
+
+          <button
+            type="button"
+            role="tab"
+            data-testid="mobile-nav-system-settings"
+            aria-label={m.nav.settings}
+            aria-selected={activeView === 'settings'}
+            onClick={() => {
+              setActiveView('settings');
+              setMobileOpenGroup(null);
+            }}
+            className={`inline-flex items-center justify-center rounded-md border p-1.5 transition-colors cursor-pointer ${
+              activeView === 'settings'
+                ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-200'
+            }`}
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
 
+        {mobileOpenGroup && (
+          <div className="mt-2.5 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-2">
+            <div className="mb-1.5 border-b border-[var(--nein-border-subtle)] px-2 pb-1.5 text-[11px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400">
+              {NAV_GROUPS.find((g) => g.id === mobileOpenGroup)?.title}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {NAV_GROUPS.find((g) => g.id === mobileOpenGroup)?.items.map((item) => {
+                const isItemActive = item.matchViews
+                  ? item.matchViews.includes(activeView)
+                  : activeView === item.view;
+                return (
+                  <button
+                    key={item.view}
+                    type="button"
+                    onClick={() => {
+                      setActiveView(item.view);
+                      setMobileOpenGroup(null);
+                    }}
+                    className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                      isItemActive
+                        ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                        : 'border-[var(--nein-border)] bg-[var(--nein-surface)] text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
+                    {item.labels[lang]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {activeView === 'quake' && (
-          <div className="mt-2 grid grid-cols-4 gap-1">
+          <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {mobileSubItems.map((sub) => {
               const active = filter === sub.id;
               return (
@@ -256,10 +301,10 @@ export default function App() {
                   key={sub.id}
                   type="button"
                   onClick={() => handleSelectQuakeFilter(sub.id)}
-                  className={`min-w-0 truncate rounded border px-1.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`rounded-md border px-2 py-1.5 text-xs font-medium leading-snug transition-colors cursor-pointer ${
                     active
                       ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] font-semibold text-[var(--nein-accent-text)]'
-                      : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
+                      : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-300'
                   }`}
                 >
                   {sub.label}
@@ -269,6 +314,36 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {(activeView === 'quake' || activeView === 'jma_quake') && (
+        <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)]">
+          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
+            <button
+              type="button"
+              onClick={() => setActiveView('quake')}
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeView === 'quake'
+                  ? 'border-[var(--nein-accent)] bg-[var(--nein-accent)] text-[var(--nein-accent-contrast)]'
+                  : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {ext.quakeExt.subViewP2P}
+            </button>
+            <button
+              type="button"
+              data-testid="quack-submenu-jma"
+              onClick={() => setActiveView('jma_quake')}
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeView === 'jma_quake'
+                  ? 'border-[var(--nein-accent)] bg-[var(--nein-accent)] text-[var(--nein-accent-contrast)]'
+                  : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {ext.quakeExt.subViewJmaQuake}
+            </button>
+          </div>
+        </div>
+      )}
 
       {activeView === 'quake' && (
         <WorkspaceToolbar
@@ -334,9 +409,10 @@ export default function App() {
             timelines={hub.radarTimelines}
             onRefresh={() => void hub.refreshCoreFeeds(true)}
           />
-        ) : activeView === 'typhoon' ? (
+        ) : activeView === 'typhoon' || activeView === 'marine' ? (
           <TyphoonMarineView
             lang={lang}
+            section={activeView === 'marine' ? 'marine' : 'typhoon'}
             typhoons={hub.typhoons}
             marine={hub.marine}
             xmlBulletins={hub.xmlBulletins}
@@ -392,11 +468,32 @@ export default function App() {
             onLoadTsunamiDetail={hub.loadTsunamiEventDetail}
             onRefresh={() => void hub.refreshCoreFeeds(true)}
           />
-        ) : activeView === 'timeline' ? (
-          <DisasterTimelineView
+        ) : activeView === 'monitor' ? (
+          <RealtimeMonitorView
+            lang={lang}
+            wsStatus={wsStatus}
+            lastUpdated={lastUpdated}
+            p2pRecords={records}
+            jmaQuakes={hub.jmaQuakes}
+            jmaTsunamis={hub.jmaTsunamis}
+            xmlBulletins={hub.xmlBulletins}
+            typhoons={hub.typhoons}
+            volcanoes={hub.volcanoes}
+            regionSnapshots={hub.regionSnapshots}
+            sourceHealth={hub.sourceHealth}
+            onNavigate={navigateFromViewString}
+            onRefreshAll={() => {
+              void refreshNow();
+              void hub.refreshEverything();
+            }}
+          />
+        ) : activeView === 'replay' || activeView === 'timeline' ? (
+          <ReplayArchiveView
             lang={lang}
             events={hub.timelineEvents}
+            timelines={hub.radarTimelines}
             onNavigate={navigateFromViewString}
+            onRefreshRadar={() => void hub.refreshCoreFeeds(true)}
           />
         ) : activeView === 'status' ? (
           <SystemStatusPanel

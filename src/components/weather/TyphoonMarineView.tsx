@@ -12,6 +12,7 @@ import { RawTextDrawer } from '../RawTextDrawer';
 
 interface TyphoonMarineViewProps {
   lang: AppLanguage;
+  section?: 'all' | 'typhoon' | 'marine';
   typhoons: TyphoonActiveInfo[];
   marine: OpenMeteoMarineData | null;
   xmlBulletins: JmaXmlBulletin[];
@@ -22,6 +23,7 @@ interface TyphoonMarineViewProps {
 
 export function TyphoonMarineView({
   lang,
+  section = 'all',
   typhoons,
   marine,
   xmlBulletins,
@@ -31,10 +33,13 @@ export function TyphoonMarineView({
 }: TyphoonMarineViewProps) {
   const ext = getExtendedMessages(lang);
   const seaBulletins = xmlBulletins.filter((b) => b.category === 'marine').slice(0, 15);
+  const showTyphoon = section === 'all' || section === 'typhoon';
+  const showMarine = section === 'all' || section === 'marine';
 
   return (
     <div className="flex flex-col gap-5">
       {/* Typhoons & Tropical Cyclones */}
+      {showTyphoon && (
       <section
         aria-label={ext.typhoon.title}
         className="rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)] p-4 sm:p-5"
@@ -130,8 +135,11 @@ export function TyphoonMarineView({
           </div>
         )}
       </section>
+      )}
 
       {/* Open-Meteo Marine & Sea Surface Telemetry */}
+      {showMarine && (
+      <>
       <section
         aria-label={ext.typhoon.marineHeading}
         className="rounded-xl border border-[var(--nein-border)] bg-[var(--nein-surface)] p-4 sm:p-5"
@@ -248,6 +256,8 @@ export function TyphoonMarineView({
           </div>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 }
