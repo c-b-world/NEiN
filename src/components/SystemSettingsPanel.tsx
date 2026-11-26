@@ -184,7 +184,7 @@ export function SystemSettingsPanel({
 }: SystemSettingsPanelProps) {
   const m = getMessages(lang);
   const ext = getExtendedMessages(lang);
-  const bgCopy = BG_MOTION_COPY[lang];
+  const bgCopy = BG_MOTION_COPY[lang] ?? BG_MOTION_COPY.ja;
   const [selectedAddOffice, setSelectedAddOffice] = useState('130000');
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const isDark = themeMode === 'dark';
@@ -523,7 +523,7 @@ export function SystemSettingsPanel({
               data-testid="bg-motion-active-label"
               className="text-[var(--nein-accent-text)]"
             >
-              {activeMotionOption.label[lang]}
+              {activeMotionOption.label[lang] ?? activeMotionOption.label.ja}
             </strong>
           </span>
         </div>
@@ -627,10 +627,10 @@ export function SystemSettingsPanel({
                 <div className="mt-3">
                   <div className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-slate-100">
                     {renderMotionIcon(opt.id)}
-                    <span>{opt.label[lang]}</span>
+                    <span>{opt.label[lang] ?? opt.label.ja}</span>
                   </div>
                   <div className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
-                    {isLocked ? bgCopy.darkModeHint : opt.description[lang]}
+                    {isLocked ? bgCopy.darkModeHint : (opt.description[lang] ?? opt.description.ja)}
                   </div>
                 </div>
               </button>

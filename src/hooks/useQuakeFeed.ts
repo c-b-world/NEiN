@@ -509,7 +509,16 @@ export function useQuakeFeed(): UseQuakeFeedResult {
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: number | null = null;
+    let retryAttempt = 0;
     let unmounted = false;
+
+    const scheduleReconnect = () => {
+      if (unmounted) return;
+      const delays = [5000, 10000, 20000, 30000, 60000];
+      const delayMs = delays[Math.min(retryAttempt, delays.length - 1)];
+      retryAttempt += 1;
+      reconnectTimer = window.setTimeout(connect, delayMs);
+    };
 
     const connect = () => {
       if (unmounted) return;
@@ -523,6 +532,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
         ws = new WebSocket(P2PQUAKE_WS_URL);
 
         ws.onopen = () => {
+          retryAttempt = 0;
           if (!unmounted) {
             setWsStatus('connected');
             setSourceStatus('p2p_ws', 'normal', {
@@ -565,7 +575,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
                     category: 'quake',
                     title: getRecordTitle(incoming, 'ja'),
                     body: incoming.earthquake.hypocenter.name || '',
-                    timestampIso: incoming.time,
+                    timestampIso: incoming.time || new Date().toISOString(),
                     isTest: false,
                     statusTag: 'issued',
                     severity: incoming.earthquake.maxScale >= 45 ? 'warning' : 'info',
@@ -581,7 +591,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
                   category: 'tsunami',
                   title: getRecordTitle(incoming, 'ja'),
                   body: incoming.cancelled ? '解除' : '津波予報更新',
-                  timestampIso: incoming.time,
+                  timestampIso: incoming.time || new Date().toISOString(),
                   isTest: false,
                   statusTag: incoming.cancelled ? 'lifted' : 'issued',
                   severity: incoming.cancelled ? 'info' : 'critical',
@@ -609,7 +619,7 @@ export function useQuakeFeed(): UseQuakeFeedResult {
           setSourceStatus('p2p_ws', 'delayed', {
             errorMessage: 'WebSocket切断・再接続待機',
           });
-          reconnectTimer = window.setTimeout(connect, 5000);
+          scheduleReconnect();
         };
       } catch {
         setWsStatus('offline');

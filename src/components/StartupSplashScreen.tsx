@@ -38,12 +38,25 @@ export function StartupSplashScreen({ lang, onComplete }: StartupSplashScreenPro
   }, []);
 
   useEffect(() => {
+    completedRef.current = false;
     let rafId = 0;
-    const startTs = performance.now();
+    const getNow = () =>
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const startTs = getNow();
 
-    const tick = (now: number) => {
+    // Hard failsafe timer so background tabs or throttled iframes never hang on the splash screen
+    const failsafeTimer = window.setTimeout(() => {
+      if (!completedRef.current) {
+        setSplashState(computeStartupSplashState(STARTUP_TOTAL_DURATION_MS));
+        triggerFinish(false);
+      }
+    }, STARTUP_TOTAL_DURATION_MS + 120);
+
+    const tick = () => {
       if (completedRef.current) return;
-      const elapsed = now - startTs;
+      const elapsed = Math.max(0, getNow() - startTs);
       const next = computeStartupSplashState(elapsed);
       setSplashState((prev) => {
         if (
@@ -61,15 +74,23 @@ export function StartupSplashScreen({ lang, onComplete }: StartupSplashScreenPro
         return;
       }
 
-      rafId = window.requestAnimationFrame(tick);
+      if (typeof window.requestAnimationFrame === 'function') {
+        rafId = window.requestAnimationFrame(tick);
+      }
     };
 
-    rafId = window.requestAnimationFrame(tick);
+    if (typeof window.requestAnimationFrame === 'function') {
+      rafId = window.requestAnimationFrame(tick);
+    }
 
     return () => {
-      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(failsafeTimer);
+      if (rafId && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(rafId);
+      }
       if (exitTimerRef.current !== null) {
         window.clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
       }
     };
   }, [triggerFinish]);

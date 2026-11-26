@@ -651,17 +651,22 @@ export function BackgroundMotionLayer({ motion, themeMode }: BackgroundMotionLay
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let prefersReducedMotion = false;
+    try {
+      prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    } catch {
+      prefersReducedMotion = false;
+    }
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = Math.max(1, window.innerWidth || 1);
+    let height = Math.max(1, window.innerHeight || 1);
+    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
 
     const resize = () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
+      width = Math.max(1, window.innerWidth || 1);
+      height = Math.max(1, window.innerHeight || 1);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -939,6 +944,15 @@ export function BackgroundMotionLayer({ motion, themeMode }: BackgroundMotionLay
             const speedMag = Math.hypot(ss.vx, ss.vy) || 1;
             const tailX = ss.x - (ss.vx / speedMag) * ss.len;
             const tailY = ss.y - (ss.vy / speedMag) * ss.len;
+
+            if (
+              !Number.isFinite(ss.x) ||
+              !Number.isFinite(ss.y) ||
+              !Number.isFinite(tailX) ||
+              !Number.isFinite(tailY)
+            ) {
+              continue;
+            }
 
             const grad = ctx.createLinearGradient(ss.x, ss.y, tailX, tailY);
             grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);

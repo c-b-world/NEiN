@@ -349,7 +349,7 @@
 }
 
 .nein-view-stage {
-  animation: nein-view-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: nein-view-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 /* Gently translucent surfaces when seasonal/cosmic background motion is enabled so sky & ground shine through without sacrificing readability */
