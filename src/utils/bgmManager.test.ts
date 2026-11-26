@@ -8,25 +8,30 @@ import {
   clampBgmVolume,
   createLocalMediaBgmTrack,
   getAllBgmTracks,
+  getYoutubePlayerErrorCodeHint,
+  isEmbeddableYoutubePlaylistId,
   parseExternalBgmUrl,
   resolveSelectedBgmTrack,
   validateBgmMediaFile,
 } from './bgmManager';
 
-test('parseExternalBgmUrl parses standard YouTube watch URL with loop playlist', () => {
-  const res = parseExternalBgmUrl('https://www.youtube.com/watch?v=jfKfPfyJRdk', 'Lofi Beats');
+test('parseExternalBgmUrl parses standard YouTube watch URL cleanly without unembeddable RD mix lists', () => {
+  const res = parseExternalBgmUrl(
+    'https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=RDaqz-KE-bpKQ&start_radio=1',
+    'Big Buck Bunny',
+  );
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.track.source, 'youtube');
-  assert.equal(res.track.title, 'Lofi Beats');
-  assert.equal(res.track.youtubeVideoId, 'jfKfPfyJRdk');
-  assert.ok(res.track.embedUrl?.startsWith('https://www.youtube.com/embed/jfKfPfyJRdk?'));
-  assert.ok(res.track.embedUrl?.includes('loop=1'));
-  assert.ok(res.track.embedUrl?.includes('playlist=jfKfPfyJRdk'));
+  assert.equal(res.track.title, 'Big Buck Bunny');
+  assert.equal(res.track.youtubeVideoId, 'aqz-KE-bpKQ');
+  assert.equal(res.track.youtubePlaylistId, undefined);
+  assert.ok(res.track.embedUrl?.startsWith('https://www.youtube.com/embed/aqz-KE-bpKQ?'));
+  assert.ok(!res.track.embedUrl?.includes('RDaqz-KE-bpKQ'));
   assert.ok(res.track.embedUrl?.includes('enablejsapi=1'));
 });
 
-test('parseExternalBgmUrl supports youtu.be, shorts, live, and music.youtube.com URLs', () => {
+test('parseExternalBgmUrl supports youtu.be, shorts, live, music.youtube.com, and pasted iframe HTML', () => {
   const shortRes = parseExternalBgmUrl('https://youtu.be/dQw4w9WgXcQ?t=12');
   assert.equal(shortRes.ok, true);
   if (shortRes.ok) {
@@ -44,9 +49,27 @@ test('parseExternalBgmUrl supports youtu.be, shorts, live, and music.youtube.com
   if (musicRes.ok) {
     assert.equal(musicRes.track.youtubeVideoId, '5qap5aO4i9A');
   }
+
+  const iframeRes = parseExternalBgmUrl(
+    '<iframe width="560" height="315" src="https://www.youtube.com/embed/aqz-KE-bpKQ?si=abc" allowfullscreen></iframe>',
+  );
+  assert.equal(iframeRes.ok, true);
+  if (iframeRes.ok) {
+    assert.equal(iframeRes.track.youtubeVideoId, 'aqz-KE-bpKQ');
+  }
 });
 
-test('parseExternalBgmUrl parses Spotify track, playlist, intl-ja URL, and spotify URI', () => {
+test('isEmbeddableYoutubePlaylistId accepts PL playlists and rejects RD/WL/LL mixes', () => {
+  assert.equal(isEmbeddableYoutubePlaylistId('PL1234567890abcdef'), true);
+  assert.equal(isEmbeddableYoutubePlaylistId('RDaqz-KE-bpKQ'), false);
+  assert.equal(isEmbeddableYoutubePlaylistId('WL'), false);
+  assert.equal(isEmbeddableYoutubePlaylistId('LL'), false);
+  assert.equal(getYoutubePlayerErrorCodeHint(150), 'embed_blocked');
+  assert.equal(getYoutubePlayerErrorCodeHint(153), 'embed_blocked');
+  assert.equal(getYoutubePlayerErrorCodeHint(100), 'not_found');
+});
+
+test('parseExternalBgmUrl parses Spotify track, playlist, intl-ja URL, iframe HTML, and spotify URI', () => {
   const trackRes = parseExternalBgmUrl(
     'https://open.spotify.com/intl-ja/track/4cOdK2wGLETKBW3PvgPWqT?si=12345',
     'Calm Track',
@@ -125,5 +148,9 @@ test('clampBgmVolume & resolveSelectedBgmTrack enforce safe defaults', () => {
   });
   assert.equal(fallback.id, BUILTIN_BGM_TRACKS[0].id);
   assert.equal(getAllBgmTracks(DEFAULT_BGM_SETTINGS).length, BUILTIN_BGM_TRACKS.length);
-  assert.ok(buildYoutubeEmbedUrl('jfKfPfyJRdk', undefined, { loop: true }).includes('loop=1'));
+  assert.ok(
+    buildYoutubeEmbedUrl('aqz-KE-bpKQ', undefined, { origin: 'https://example.com' }).includes(
+      'origin=https%3A%2F%2Fexample.com',
+    ),
+  );
 });

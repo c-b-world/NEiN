@@ -91,38 +91,65 @@ export function resolveSelectedBgmTrack(settings: BgmSettings): BgmTrack {
   return all.find((t) => t.id === settings.selectedTrackId) ?? BUILTIN_BGM_TRACKS[0];
 }
 
+export function isEmbeddableYoutubePlaylistId(listId?: string): boolean {
+  if (!listId) return false;
+  // Exclude YouTube auto-mixes (RD*), Watch Later (WL), Liked (LL), and private system lists
+  if (/^(RD|WL|LL|LM|FL)/i.test(listId)) return false;
+  return /^(PL|OLAK5uy_|UU)[A-Za-z0-9_-]{8,64}$/.test(listId);
+}
+
 export function buildYoutubeEmbedUrl(
   videoId?: string,
   playlistId?: string,
-  options: { autoplay?: boolean; loop?: boolean } = {},
+  options: { autoplay?: boolean; loop?: boolean; origin?: string } = {},
 ): string {
-  const autoplay = options.autoplay !== false ? '1' : '0';
-  const loop = options.loop !== false ? '1' : '0';
+  const autoplay = options.autoplay === true ? '1' : '0';
+  const validPlaylist = isEmbeddableYoutubePlaylistId(playlistId) ? playlistId : undefined;
+  const origin =
+    options.origin ||
+    (typeof window !== 'undefined' && window.location?.origin?.startsWith('http')
+      ? window.location.origin
+      : '');
 
   if (videoId) {
     const params = new URLSearchParams({
-      autoplay,
-      loop,
-      playlist: playlistId || videoId,
-      enablejsapi: '1',
       rel: '0',
-      modestbranding: '1',
       playsinline: '1',
+      enablejsapi: '1',
     });
+    if (autoplay === '1') {
+      params.set('autoplay', '1');
+    }
+    if (validPlaylist) {
+      params.set('listType', 'playlist');
+      params.set('list', validPlaylist);
+      if (options.loop !== false) {
+        params.set('loop', '1');
+      }
+    }
+    if (origin) {
+      params.set('origin', origin);
+    }
     return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
   }
 
-  if (playlistId) {
+  if (validPlaylist) {
     const params = new URLSearchParams({
       listType: 'playlist',
-      list: playlistId,
-      autoplay,
-      loop,
-      enablejsapi: '1',
+      list: validPlaylist,
       rel: '0',
-      modestbranding: '1',
       playsinline: '1',
+      enablejsapi: '1',
     });
+    if (autoplay === '1') {
+      params.set('autoplay', '1');
+    }
+    if (options.loop !== false) {
+      params.set('loop', '1');
+    }
+    if (origin) {
+      params.set('origin', origin);
+    }
     return `https://www.youtube.com/embed?${params.toString()}`;
   }
 
@@ -133,12 +160,18 @@ export function buildSpotifyEmbedUrl(kind: SpotifyMediaKind, id: string): string
   return `https://open.spotify.com/embed/${kind}/${id}?utm_source=generator&theme=0`;
 }
 
+export function getYoutubePlayerErrorCodeHint(code: number): 'embed_blocked' | 'not_found' | 'invalid_param' | 'playback_error' {
+  if (code === 101 || code === 150 || code === 153) return 'embed_blocked';
+  if (code === 100) return 'not_found';
+  if (code === 2) return 'invalid_param';
+  return 'playback_error';
+}
+
 export type ExternalMediaParseResult =
   | { ok: true; track: BgmTrack }
   | { ok: false; errorCode: 'empty' | 'invalid_url' | 'unsupported_provider' };
 
 const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
-const YOUTUBE_LIST_RE = /^[A-Za-z0-9_-]{10,64}$/;
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{10,40}$/;
 const SPOTIFY_KINDS: ReadonlySet<string> = new Set<SpotifyMediaKind>([
   'track',
@@ -152,11 +185,23 @@ function makeTrackId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function extractUrlFromInput(rawInput: string): string {
+  const trimmed = rawInput.trim();
+  // Support pasting full <iframe ... src="..."> embed HTML from YouTube / Spotify
+  if (trimmed.includes('<iframe')) {
+    const srcMatch = /src\s*=\s*["']([^"']+)["']/i.exec(trimmed);
+    if (srcMatch?.[1]) {
+      return srcMatch[1].trim();
+    }
+  }
+  return trimmed;
+}
+
 export function parseExternalBgmUrl(
   rawInput: string,
   customTitle?: string,
 ): ExternalMediaParseResult {
-  const trimmed = rawInput.trim();
+  const trimmed = extractUrlFromInput(rawInput);
   if (!trimmed) {
     return { ok: false, errorCode: 'empty' };
   }
@@ -206,7 +251,8 @@ export function parseExternalBgmUrl(
     const segments = parsed.pathname.split('/').filter(Boolean);
     let videoId: string | undefined;
     const rawList = parsed.searchParams.get('list') ?? undefined;
-    const playlistId = rawList && YOUTUBE_LIST_RE.test(rawList) ? rawList : undefined;
+    // Only keep playlists that YouTube actually permits inside embeds (ignore RD* mixes, WL, LL)
+    const playlistId = isEmbeddableYoutubePlaylistId(rawList) ? rawList : undefined;
 
     if (host === 'youtu.be') {
       if (segments[0] && YOUTUBE_ID_RE.test(segments[0])) {
@@ -235,6 +281,10 @@ export function parseExternalBgmUrl(
         ? `YouTube BGM (${videoId})`
         : `YouTube Playlist (${playlistId?.slice(0, 10) ?? ''})`);
 
+    const cleanWatchUrl = videoId
+      ? `https://www.youtube.com/watch?v=${videoId}`
+      : `https://www.youtube.com/playlist?list=${playlistId}`;
+
     return {
       ok: true,
       track: {
@@ -242,8 +292,8 @@ export function parseExternalBgmUrl(
         title: cleanTitle,
         subtitle: playlistId && !videoId ? 'YouTube Playlist Embed' : 'YouTube Auto-Loop Embed',
         source: 'youtube',
-        originalUrl: parsed.toString(),
-        embedUrl: buildYoutubeEmbedUrl(videoId, playlistId, { autoplay: true, loop: true }),
+        originalUrl: cleanWatchUrl,
+        embedUrl: buildYoutubeEmbedUrl(videoId, playlistId, { autoplay: false, loop: true }),
         youtubeVideoId: videoId,
         youtubePlaylistId: playlistId,
         addedAt: new Date().toISOString(),
@@ -279,7 +329,7 @@ export function parseExternalBgmUrl(
         title: cleanTitle,
         subtitle: `Spotify Embed · ${kind}`,
         source: 'spotify',
-        originalUrl: parsed.toString(),
+        originalUrl: `https://open.spotify.com/${kind}/${idCandidate}`,
         embedUrl: buildSpotifyEmbedUrl(kind, idCandidate),
         spotifyKind: kind,
         spotifyId: idCandidate,

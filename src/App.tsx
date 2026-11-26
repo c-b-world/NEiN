@@ -451,7 +451,9 @@ export default function App() {
 
       <main
         key={activeView}
-        className="nein-view-stage relative z-10 mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6"
+        className={`nein-view-stage relative z-10 mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6 ${
+          bgmSettings.enabled ? 'pb-28' : ''
+        }`}
       >
         {activeView === 'dashboard' ? (
           <ComprehensiveDashboard
