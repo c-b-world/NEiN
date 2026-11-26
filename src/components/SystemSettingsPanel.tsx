@@ -1,26 +1,43 @@
 import {
+  ArrowDown,
+  ArrowUp,
   Bell,
   BellOff,
   Check,
   Globe,
+  LocateFixed,
+  MapPin,
   Moon,
   Palette,
+  Plus,
   RefreshCw,
   RotateCcw,
   Sun,
+  Trash2,
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { useState } from 'react';
+import { JAPAN_WEATHER_OFFICES } from '../data/japanWeatherRegions';
+import type {
+  NotificationCategoryKey,
+  NotificationHistoryEntry,
+  NotificationPreferences,
+  RegisteredRegion,
+} from '../types/disaster';
 import {
   type AppLanguage,
   LANGUAGE_OPTIONS,
   getMessages,
 } from '../utils/i18n';
+import { getExtendedMessages } from '../utils/i18nExtended';
+import { playChimeWithVolume } from '../utils/notificationCenter';
 import {
   COLOR_THEME_OPTIONS,
   type ColorThemeId,
   type ThemeMode,
 } from '../utils/themeSettings';
+import { formatJstTimestamp } from '../utils/weatherParser';
 
 interface SystemSettingsPanelProps {
   lang: AppLanguage;
@@ -39,6 +56,16 @@ interface SystemSettingsPanelProps {
   onToggleAutoUpdate: () => void;
   pollIntervalSec: number;
   onChangePollInterval: (sec: number) => void;
+  registeredRegions: RegisteredRegion[];
+  onAddRegion: (officeCode: string) => void;
+  onRemoveRegion: (id: string) => void;
+  onMoveRegion: (id: string, dir: -1 | 1) => void;
+  onDetectNearestRegion: (lat: number, lon: number) => void;
+  onOpenWeatherForRegion: () => void;
+  notificationPrefs: NotificationPreferences;
+  onChangeNotificationPrefs: (next: NotificationPreferences) => void;
+  notificationHistory: NotificationHistoryEntry[];
+  onClearNotificationHistory: () => void;
 }
 
 export function SystemSettingsPanel({
@@ -58,13 +85,54 @@ export function SystemSettingsPanel({
   onToggleAutoUpdate,
   pollIntervalSec,
   onChangePollInterval,
+  registeredRegions,
+  onAddRegion,
+  onRemoveRegion,
+  onMoveRegion,
+  onDetectNearestRegion,
+  onOpenWeatherForRegion,
+  notificationPrefs,
+  onChangeNotificationPrefs,
+  notificationHistory,
+  onClearNotificationHistory,
 }: SystemSettingsPanelProps) {
   const m = getMessages(lang);
+  const ext = getExtendedMessages(lang);
+  const [selectedAddOffice, setSelectedAddOffice] = useState('130000');
+  const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const isDark = themeMode === 'dark';
   const activeThemeOption =
     COLOR_THEME_OPTIONS.find((opt) => opt.id === colorTheme) ?? COLOR_THEME_OPTIONS[0];
   const activeLangOption =
     LANGUAGE_OPTIONS.find((opt) => opt.id === lang) ?? LANGUAGE_OPTIONS[0];
+
+  const handleRequestGeolocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoStatus(ext.regions.geolocateDenied);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        onDetectNearestRegion(pos.coords.latitude, pos.coords.longitude);
+        setGeoStatus(null);
+      },
+      () => {
+        setGeoStatus(ext.regions.geolocateDenied);
+      },
+      { timeout: 8000 },
+    );
+  };
+
+  const categoryKeys: NotificationCategoryKey[] = [
+    'eew',
+    'quake',
+    'tsunami',
+    'weather_warning',
+    'typhoon',
+    'landslide_flood',
+    'volcano',
+    'heatstroke',
+  ];
 
   return (
     <section
@@ -462,6 +530,304 @@ export function SystemSettingsPanel({
               </select>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 5. Registered Regions Watchlist */}
+      <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--nein-border-subtle)] pb-3.5">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-[var(--nein-accent-text)]" aria-hidden="true" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {ext.regions.title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={handleRequestGeolocation}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--nein-accent-text)] cursor-pointer"
+          >
+            <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{ext.regions.geolocateBtn}</span>
+          </button>
+        </div>
+
+        <p className="mt-2.5 text-xs text-slate-600 dark:text-slate-400">
+          {ext.regions.subtitle}
+        </p>
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+          {ext.regions.geolocatePermissionNote}
+        </p>
+        {geoStatus && (
+          <p className="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+            {geoStatus}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            aria-label={ext.regions.addRegion}
+            value={selectedAddOffice}
+            onChange={(e) => setSelectedAddOffice(e.target.value)}
+            className="min-w-[200px] flex-1 rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 cursor-pointer"
+          >
+            {JAPAN_WEATHER_OFFICES.map((o) => (
+              <option key={o.officeCode} value={o.officeCode}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => onAddRegion(selectedAddOffice)}
+            className="inline-flex items-center gap-1 rounded-md bg-[var(--nein-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--nein-accent-contrast)] cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{ext.regions.addRegion}</span>
+          </button>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {registeredRegions.length === 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">{ext.regions.empty}</p>
+          ) : (
+            registeredRegions.map((reg, idx) => (
+              <div
+                key={reg.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] px-3 py-2 text-xs"
+              >
+                <div>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{reg.label}</span>
+                  <span className="ml-2 font-mono text-[11px] text-slate-500">
+                    ({reg.officeCode})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={onOpenWeatherForRegion}
+                    className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] px-2 py-1 text-[11px] font-medium text-[var(--nein-accent-text)] cursor-pointer"
+                  >
+                    {ext.regions.openWeather}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    aria-label={ext.regions.moveUp}
+                    onClick={() => onMoveRegion(reg.id, -1)}
+                    className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] p-1 text-slate-600 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === registeredRegions.length - 1}
+                    aria-label={ext.regions.moveDown}
+                    onClick={() => onMoveRegion(reg.id, 1)}
+                    className="rounded border border-[var(--nein-border)] bg-[var(--nein-surface)] p-1 text-slate-600 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={ext.regions.remove}
+                    onClick={() => onRemoveRegion(reg.id)}
+                    className="rounded border border-red-400/50 bg-red-500/10 p-1 text-red-600 dark:text-red-400 cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* 6. Expanded Multi-Hazard Notification Matrix & History */}
+      <div className="rounded-lg border border-[var(--nein-border)] bg-[var(--nein-surface)] p-5 sm:p-6">
+        <div className="border-b border-[var(--nein-border-subtle)] pb-3.5">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            {ext.notifyExt.title}
+          </h2>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {ext.notifyExt.subtitle}
+          </p>
+        </div>
+
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            {ext.notifyExt.categoriesLabel}
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {categoryKeys.map((key) => {
+              const checked = Boolean(notificationPrefs.enabledCategories[key]);
+              return (
+                <label
+                  key={key}
+                  className="flex items-center gap-2 rounded border border-[var(--nein-border)] bg-[var(--nein-sub)] px-2.5 py-2 text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      onChangeNotificationPrefs({
+                        ...notificationPrefs,
+                        enabledCategories: {
+                          ...notificationPrefs.enabledCategories,
+                          [key]: !checked,
+                        },
+                      })
+                    }
+                    className="h-3.5 w-3.5 accent-[var(--nein-accent)] cursor-pointer"
+                  />
+                  <span>{ext.notifyExt.categories[key]}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label
+              htmlFor="notify-min-scale"
+              className="block text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1"
+            >
+              {ext.notifyExt.minScaleLabel}
+            </label>
+            <select
+              id="notify-min-scale"
+              value={notificationPrefs.minQuakeScale}
+              onChange={(e) =>
+                onChangeNotificationPrefs({
+                  ...notificationPrefs,
+                  minQuakeScale: Number(e.target.value),
+                })
+              }
+              className="w-full rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 cursor-pointer"
+            >
+              <option value={10}>1+</option>
+              <option value={20}>2+</option>
+              <option value={30}>3+</option>
+              <option value={40}>4+</option>
+              <option value={45}>5-+</option>
+              <option value={50}>5++</option>
+              <option value={55}>6-+</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="notify-warning-filter"
+              className="block text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1"
+            >
+              {ext.notifyExt.warningFilterLabel}
+            </label>
+            <select
+              id="notify-warning-filter"
+              value={notificationPrefs.warningLevelFilter}
+              onChange={(e) =>
+                onChangeNotificationPrefs({
+                  ...notificationPrefs,
+                  warningLevelFilter: e.target.value as 'all' | 'warning_only' | 'special_only',
+                })
+              }
+              className="w-full rounded-md border border-[var(--nein-border)] bg-[var(--nein-sub)] px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 cursor-pointer"
+            >
+              <option value="all">All (Special + Warning + Advisory)</option>
+              <option value="warning_only">Warning + Special</option>
+              <option value="special_only">Special Warning Only</option>
+            </select>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">
+              <label htmlFor="notify-chime-volume">{ext.notifyExt.volumeLabel}</label>
+              <span className="font-mono">{Math.round(notificationPrefs.chimeVolume * 100)}%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="notify-chime-volume"
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(notificationPrefs.chimeVolume * 100)}
+                onChange={(e) =>
+                  onChangeNotificationPrefs({
+                    ...notificationPrefs,
+                    chimeVolume: Number(e.target.value) / 100,
+                  })
+                }
+                className="flex-1 accent-[var(--nein-accent)] cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={() => playChimeWithVolume(notificationPrefs.chimeVolume, false)}
+                className="rounded border border-[var(--nein-border)] bg-[var(--nein-sub)] px-2.5 py-1 text-[11px] font-medium text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                {ext.notifyExt.testChimeBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <label className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={notificationPrefs.inAppToasts}
+            onChange={() =>
+              onChangeNotificationPrefs({
+                ...notificationPrefs,
+                inAppToasts: !notificationPrefs.inAppToasts,
+              })
+            }
+            className="h-4 w-4 accent-[var(--nein-accent)] cursor-pointer"
+          />
+          <span>{ext.notifyExt.inAppLabel}</span>
+        </label>
+
+        <p className="mt-3 rounded border border-amber-400/50 bg-amber-500/10 p-2.5 text-[11px] text-amber-900 dark:text-amber-200">
+          {ext.notifyExt.deliveryCaveat}
+        </p>
+
+        {/* Notification History */}
+        <div className="mt-4 border-t border-[var(--nein-border-subtle)] pt-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              {ext.notifyExt.historyTitle} ({notificationHistory.length})
+            </h3>
+            {notificationHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={onClearNotificationHistory}
+                className="text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+              >
+                {ext.notifyExt.clearHistory}
+              </button>
+            )}
+          </div>
+
+          {notificationHistory.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {ext.notifyExt.emptyHistory}
+            </p>
+          ) : (
+            <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+              {notificationHistory.slice(0, 15).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-2.5 py-1.5 text-xs"
+                >
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
+                    {item.title} {item.isTest ? `[${ext.common.testSimulationWarning}]` : ''}
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500">
+                    {formatJstTimestamp(item.timestampIso)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

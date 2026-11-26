@@ -118,6 +118,11 @@ export interface AmedasObservation {
   windDirectionText: string | null;
   precipitation1hMm: number | null;
   precipitation24hMm: number | null;
+  snowDepthCm?: number | null;
+  snow1hCm?: number | null;
+  snow24hCm?: number | null;
+  sunshine1hMin?: number | null;
+  maxGustMs?: number | null;
 }
 
 export interface HourlyWeatherPoint {
@@ -154,6 +159,11 @@ export interface OpenMeteoBundle {
     precipitationMm: number | null;
     weatherCode: number | null;
     weatherLabel: string;
+    windGustMs?: number | null;
+    visibilityM?: number | null;
+    uvIndex?: number | null;
+    apparentTempC?: number | null;
+    snowfallCm?: number | null;
   } | null;
   hourly24h: HourlyWeatherPoint[];
   daily7d: OpenMeteoDailyPoint[];

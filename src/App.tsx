@@ -3,16 +3,44 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AlertCircle, CloudSun, Layers, Settings } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  CloudRain,
+  CloudSun,
+  Flame,
+  History,
+  Layers,
+  LayoutDashboard,
+  Map as MapIcon,
+  Radar,
+  ServerCrash,
+  Settings,
+  Sun,
+  Waves,
+  Wind,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EEWWarningModal } from './components/EEWWarningModal';
 import { Header, type AppViewMode } from './components/Header';
+import { InAppToastContainer } from './components/InAppToastContainer';
 import { QuakeDetailPanel } from './components/QuakeDetailPanel';
 import { QuakeList } from './components/QuakeList';
 import { SystemSettingsPanel } from './components/SystemSettingsPanel';
 import { TestDispatchModal } from './components/TestDispatchModal';
-import { WeatherDashboard } from './components/weather/WeatherDashboard';
 import { WorkspaceToolbar } from './components/WorkspaceToolbar';
+import { ComprehensiveDashboard } from './components/dashboard/ComprehensiveDashboard';
+import { NationalDisasterMap } from './components/map/NationalDisasterMap';
+import { QuakeExtendedPanel } from './components/quake/QuakeExtendedPanel';
+import { DisasterTimelineView } from './components/system/DisasterTimelineView';
+import { SystemStatusPanel } from './components/system/SystemStatusPanel';
+import { DisasterHazardsView } from './components/weather/DisasterHazardsView';
+import { EnvironmentView } from './components/weather/EnvironmentView';
+import { RadarSatelliteView } from './components/weather/RadarSatelliteView';
+import { TyphoonMarineView } from './components/weather/TyphoonMarineView';
+import { VolcanoView } from './components/weather/VolcanoView';
+import { WeatherDashboard } from './components/weather/WeatherDashboard';
+import { useDisasterHub } from './hooks/useDisasterHub';
 import { useQuakeFeed } from './hooks/useQuakeFeed';
 import type { QuakeFilter } from './types/quake';
 import {
@@ -22,6 +50,7 @@ import {
   loadLanguage,
   saveLanguage,
 } from './utils/i18n';
+import { getExtendedMessages } from './utils/i18nExtended';
 import {
   type ColorThemeId,
   DEFAULT_THEME_SETTINGS,
@@ -83,13 +112,16 @@ export default function App() {
     counts,
   } = useQuakeFeed();
 
-  const [activeView, setActiveView] = useState<AppViewMode>('quake');
+  const [activeView, setActiveView] = useState<AppViewMode>('dashboard');
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => loadThemeSettings());
   const [lang, setLang] = useState<AppLanguage>(() => loadLanguage());
   const detailContainerRef = useRef<HTMLDivElement | null>(null);
 
   const m = getMessages(lang);
+  const ext = getExtendedMessages(lang);
+
+  const hub = useDisasterHub(lang, records);
 
   useEffect(() => {
     applyThemeToDocument(themeSettings);
@@ -134,11 +166,40 @@ export default function App() {
     }
   };
 
+  const navigateFromViewString = (view: string) => {
+    setActiveView(view as AppViewMode);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const mobileSubItems: Array<{ id: QuakeFilter; label: string }> = [
     { id: 'all', label: m.list.tabAll },
     { id: 'quake', label: m.list.tabQuake },
     { id: 'eew', label: m.list.tabEew },
     { id: 'other', label: m.list.tabOther },
+  ];
+
+  const mobileNavTabs: Array<{
+    view: AppViewMode;
+    label: string;
+    testId?: string;
+    icon: typeof LayoutDashboard;
+  }> = [
+    { view: 'dashboard', label: ext.extNav.dashboard, icon: LayoutDashboard },
+    { view: 'quake', label: m.nav.quack, testId: 'mobile-nav-nein-quack', icon: Layers },
+    { view: 'jma_quake', label: 'JMA', icon: Activity },
+    { view: 'tsunami', label: ext.extNav.tsunamiMonitor, icon: Waves },
+    { view: 'weather', label: m.nav.weather, icon: CloudSun },
+    { view: 'radar', label: ext.extNav.radarSatellite, icon: Radar },
+    { view: 'map', label: ext.extNav.integratedMap, icon: MapIcon },
+    { view: 'typhoon', label: ext.extNav.typhoonMarine, icon: Wind },
+    { view: 'hazards', label: ext.extNav.hazardsFlood, icon: CloudRain },
+    { view: 'volcano', label: ext.extNav.volcano, icon: Flame },
+    { view: 'environment', label: ext.extNav.environment, icon: Sun },
+    { view: 'timeline', label: ext.extNav.timeline, icon: History },
+    { view: 'status', label: ext.extNav.systemStatus, icon: ServerCrash },
+    { view: 'settings', label: m.nav.settings, testId: 'mobile-nav-system-settings', icon: Settings },
   ];
 
   return (
@@ -150,59 +211,40 @@ export default function App() {
         lang={lang}
         activeView={activeView}
         activeFilter={filter}
+        onSelectView={setActiveView}
         onSelectFilter={handleSelectQuakeFilter}
-        onSelectWeather={() => setActiveView('weather')}
-        onSelectSettings={() => setActiveView('settings')}
         onOpenTestModal={() => setIsTestModalOpen(true)}
       />
 
-      {/* Mobile View Switcher (visible < md) */}
+      {/* Mobile View Switcher (visible < md, overflow-x contained cleanly) */}
       <div className="border-b border-[var(--nein-border)] bg-[var(--nein-surface)] px-3 py-2 md:hidden">
-        <div role="tablist" aria-label={m.nav.mobileModeSwitcher} className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            role="tab"
-            data-testid="mobile-nav-nein-quack"
-            aria-selected={activeView === 'quake'}
-            onClick={() => setActiveView('quake')}
-            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
-              activeView === 'quake'
-                ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
-                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{m.nav.quack}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeView === 'weather'}
-            onClick={() => setActiveView('weather')}
-            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
-              activeView === 'weather'
-                ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
-                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <CloudSun className="h-3.5 w-3.5 shrink-0 text-[var(--nein-accent-text)]" aria-hidden="true" />
-            <span className="truncate">{m.nav.weather}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            data-testid="mobile-nav-system-settings"
-            aria-selected={activeView === 'settings'}
-            onClick={() => setActiveView('settings')}
-            className={`min-w-0 inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
-              activeView === 'settings'
-                ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
-                : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Settings className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{m.nav.settings}</span>
-          </button>
+        <div
+          role="tablist"
+          aria-label={m.nav.mobileModeSwitcher}
+          className="flex items-center gap-1.5 overflow-x-auto pb-1"
+        >
+          {mobileNavTabs.map((tab) => {
+            const Icon = tab.icon;
+            const selected = activeView === tab.view;
+            return (
+              <button
+                key={tab.view}
+                type="button"
+                role="tab"
+                data-testid={tab.testId}
+                aria-selected={selected}
+                onClick={() => setActiveView(tab.view)}
+                className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                  selected
+                    ? 'border-[var(--nein-accent-border)] bg-[var(--nein-accent-soft)] text-[var(--nein-accent-text)]'
+                    : 'border-[var(--nein-border)] bg-[var(--nein-sub)] text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {activeView === 'quake' && (
@@ -255,11 +297,115 @@ export default function App() {
       )}
 
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
-        {activeView === 'weather' ? (
+        {activeView === 'dashboard' ? (
+          <ComprehensiveDashboard
+            lang={lang}
+            cards={hub.dashboardCards}
+            onMoveCard={hub.moveDashboardCard}
+            onToggleVisible={hub.toggleDashboardCardVisible}
+            onToggleSize={hub.toggleDashboardCardSize}
+            onResetLayout={hub.resetDashboardCards}
+            onNavigate={navigateFromViewString}
+            onRefreshAll={() => {
+              void refreshNow();
+              void hub.refreshEverything();
+            }}
+            p2pRecords={records}
+            jmaQuakes={hub.jmaQuakes}
+            jmaTsunamis={hub.jmaTsunamis}
+            xmlBulletins={hub.xmlBulletins}
+            volcanoes={hub.volcanoes}
+            typhoons={hub.typhoons}
+            registeredRegions={hub.registeredRegions}
+            regionSnapshots={hub.regionSnapshots}
+            airQuality={hub.airQuality}
+            timelineEvents={hub.timelineEvents}
+            sourceHealth={hub.sourceHealth}
+          />
+        ) : activeView === 'weather' ? (
           <WeatherDashboard
             lang={lang}
             isActive={activeView === 'weather'}
             themeMode={themeSettings.mode}
+          />
+        ) : activeView === 'radar' ? (
+          <RadarSatelliteView
+            lang={lang}
+            timelines={hub.radarTimelines}
+            onRefresh={() => void hub.refreshCoreFeeds(true)}
+          />
+        ) : activeView === 'typhoon' ? (
+          <TyphoonMarineView
+            lang={lang}
+            typhoons={hub.typhoons}
+            marine={hub.marine}
+            xmlBulletins={hub.xmlBulletins}
+            activeOfficeCode={hub.activeRegionOfficeCode}
+            onSelectOfficeCode={hub.setActiveRegionOfficeCode}
+            onRefresh={() => void hub.refreshEverything()}
+          />
+        ) : activeView === 'hazards' ? (
+          <DisasterHazardsView
+            lang={lang}
+            xmlBulletins={hub.xmlBulletins}
+            timelines={hub.radarTimelines}
+            onRefresh={() => void hub.refreshCoreFeeds(true)}
+          />
+        ) : activeView === 'volcano' ? (
+          <VolcanoView
+            lang={lang}
+            volcanoes={hub.volcanoes}
+            xmlBulletins={hub.xmlBulletins}
+            onRefresh={() => void hub.refreshEverything()}
+          />
+        ) : activeView === 'environment' ? (
+          <EnvironmentView
+            lang={lang}
+            airQuality={hub.airQuality}
+            xmlBulletins={hub.xmlBulletins}
+            activeOfficeCode={hub.activeRegionOfficeCode}
+            onSelectOfficeCode={hub.setActiveRegionOfficeCode}
+            onRefresh={() => void hub.refreshEverything()}
+          />
+        ) : activeView === 'map' ? (
+          <NationalDisasterMap
+            lang={lang}
+            config={hub.mapConfig}
+            onChangeConfig={hub.setMapConfig}
+            onResetConfig={hub.resetMapConfig}
+            p2pRecords={records}
+            jmaQuakes={hub.jmaQuakes}
+            jmaTsunamis={hub.jmaTsunamis}
+            volcanoes={hub.volcanoes}
+            typhoons={hub.typhoons}
+            amedasPoints={hub.amedasPoints}
+            onRequestAmedas={() => void hub.loadNationwideAmedas(false)}
+            radarTimelines={hub.radarTimelines}
+          />
+        ) : activeView === 'jma_quake' || activeView === 'tsunami' ? (
+          <QuakeExtendedPanel
+            lang={lang}
+            mode={activeView}
+            jmaQuakes={hub.jmaQuakes}
+            jmaTsunamis={hub.jmaTsunamis}
+            xmlBulletins={hub.xmlBulletins}
+            onLoadTsunamiDetail={hub.loadTsunamiEventDetail}
+            onRefresh={() => void hub.refreshCoreFeeds(true)}
+          />
+        ) : activeView === 'timeline' ? (
+          <DisasterTimelineView
+            lang={lang}
+            events={hub.timelineEvents}
+            onNavigate={navigateFromViewString}
+          />
+        ) : activeView === 'status' ? (
+          <SystemStatusPanel
+            lang={lang}
+            sources={hub.sourceHealth}
+            onRecheckAll={() => {
+              void refreshNow();
+              void hub.refreshEverything();
+            }}
           />
         ) : activeView === 'settings' ? (
           <SystemSettingsPanel
@@ -279,6 +425,16 @@ export default function App() {
             onToggleAutoUpdate={() => setAutoUpdateEnabled(!autoUpdateEnabled)}
             pollIntervalSec={pollIntervalSec}
             onChangePollInterval={setPollIntervalSec}
+            registeredRegions={hub.registeredRegions}
+            onAddRegion={hub.addRegisteredRegion}
+            onRemoveRegion={hub.removeRegisteredRegion}
+            onMoveRegion={hub.moveRegisteredRegion}
+            onDetectNearestRegion={(lat, lon) => hub.addNearestRegionByCoords(lat, lon)}
+            onOpenWeatherForRegion={() => setActiveView('weather')}
+            notificationPrefs={hub.notificationPrefs}
+            onChangeNotificationPrefs={hub.setNotificationPrefs}
+            notificationHistory={hub.notificationHistory}
+            onClearNotificationHistory={hub.clearNotificationHistory}
           />
         ) : (
           <>
@@ -355,6 +511,11 @@ export default function App() {
           <span>{m.footer.sourceLine}</span>
         </div>
       </footer>
+
+      <InAppToastContainer
+        lang={lang}
+        onNewAlertRecorded={hub.refreshNotificationHistory}
+      />
 
       <EEWWarningModal lang={lang} alert={activeEEW} onDismiss={dismissEEW} />
 

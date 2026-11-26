@@ -904,6 +904,11 @@ export function parseAmedasObservation(
     windDirectionText: windDirIndex !== null ? formatAmedasWindDirection(windDirIndex) : null,
     precipitation1hMm: readAmedasTuple(stationRaw.precipitation1h),
     precipitation24hMm: readAmedasTuple(stationRaw.precipitation24h),
+    snowDepthCm: readAmedasTuple(stationRaw.snow),
+    snow1hCm: readAmedasTuple(stationRaw.snow1h),
+    snow24hCm: readAmedasTuple(stationRaw.snow24h),
+    sunshine1hMin: readAmedasTuple(stationRaw.sun10m) !== null ? (readAmedasTuple(stationRaw.sun1h) ?? null) : readAmedasTuple(stationRaw.sun1h),
+    maxGustMs: readAmedasTuple(stationRaw.gust),
   };
 }
 
@@ -958,6 +963,11 @@ export function parseOpenMeteoBundle(
         precipitationMm: toNullableNumber(currentRaw.precipitation),
         weatherCode: currentWmo,
         weatherLabel: describeWmoWeatherCode(currentWmo).label,
+        windGustMs: toNullableNumber(currentRaw.wind_gusts_10m),
+        visibilityM: toNullableNumber(currentRaw.visibility),
+        uvIndex: toNullableNumber(currentRaw.uv_index),
+        apparentTempC: toNullableNumber(currentRaw.apparent_temperature),
+        snowfallCm: toNullableNumber(currentRaw.snowfall),
       }
     : null;
 

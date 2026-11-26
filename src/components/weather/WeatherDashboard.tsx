@@ -13,6 +13,7 @@ import {
   Umbrella,
   Wind,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import {
   JAPAN_WEATHER_OFFICES,
   WEATHER_REGION_LABELS,
@@ -20,6 +21,8 @@ import {
 import { useWeatherDashboard } from '../../hooks/useWeatherDashboard';
 import type { SourceMeta, WeatherRegionGroup } from '../../types/weather';
 import { type AppLanguage, getMessages } from '../../utils/i18n';
+import { getExtendedMessages } from '../../utils/i18nExtended';
+import { fetchWeatherOverviewText } from '../../utils/jmaFeedsApi';
 import type { ThemeMode } from '../../utils/themeSettings';
 import { describeJmaWeatherCode } from '../../utils/weatherCodes';
 import {
@@ -27,6 +30,7 @@ import {
   formatJstClock,
   formatJstTimestamp,
 } from '../../utils/weatherParser';
+import { RawTextDrawer } from '../RawTextDrawer';
 import { WeatherCharts } from './WeatherCharts';
 import { WeatherIcon } from './WeatherIcon';
 
@@ -101,6 +105,7 @@ function StatusIndicator({
 
 export function WeatherDashboard({ lang, isActive, themeMode }: WeatherDashboardProps) {
   const mw = getMessages(lang).weather;
+  const ext = getExtendedMessages(lang);
   const {
     selectedOffice,
     selectedOfficeCode,
@@ -120,6 +125,23 @@ export function WeatherDashboard({ lang, isActive, themeMode }: WeatherDashboard
     overviewRows,
     isLoadingOverview,
   } = useWeatherDashboard(isActive);
+
+  const [overviewText, setOverviewText] = useState<{
+    headlineText: string;
+    text: string;
+    reportDatetime: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isActive) return;
+    let cancelled = false;
+    void fetchWeatherOverviewText(selectedOfficeCode).then((res) => {
+      if (!cancelled) setOverviewText(res);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, selectedOfficeCode]);
 
   const modelNotes = deriveModelAdvisoryNotes(openMeteo);
   const specialWarnings = warning?.activeSpecialWarnings ?? [];
@@ -666,6 +688,93 @@ export function WeatherDashboard({ lang, isActive, themeMode }: WeatherDashboard
             </div>
           </div>
         </div>
+
+        {/* Extended Atmospheric Telemetry Strip (Snow, Sunshine, Gusts, Visibility, Apparent Temp, UV) */}
+        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.snowDepthLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {amedas?.snowDepthCm !== null && amedas?.snowDepthCm !== undefined
+                ? `${amedas.snowDepthCm} cm`
+                : amedas?.snow1hCm !== null && amedas?.snow1hCm !== undefined
+                ? `1h: ${amedas.snow1hCm} cm`
+                : openMeteo?.current?.snowfallCm !== null && openMeteo?.current?.snowfallCm !== undefined
+                ? `${openMeteo.current.snowfallCm} cm`
+                : '--'}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.sunshineLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {amedas?.sunshine1hMin !== null && amedas?.sunshine1hMin !== undefined
+                ? `${amedas.sunshine1hMin} min`
+                : '--'}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.gustLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {amedas?.maxGustMs !== null && amedas?.maxGustMs !== undefined
+                ? `${amedas.maxGustMs.toFixed(1)} m/s`
+                : openMeteo?.current?.windGustMs !== null && openMeteo?.current?.windGustMs !== undefined
+                ? `${openMeteo.current.windGustMs.toFixed(1)} m/s`
+                : '--'}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.apparentTempLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {openMeteo?.current?.apparentTempC !== null && openMeteo?.current?.apparentTempC !== undefined
+                ? `${openMeteo.current.apparentTempC.toFixed(1)} ℃`
+                : '--'}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.visibilityLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {openMeteo?.current?.visibilityM !== null && openMeteo?.current?.visibilityM !== undefined
+                ? `${(openMeteo.current.visibilityM / 1000).toFixed(1)} km`
+                : '--'}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nein-border-subtle)] bg-[var(--nein-sub)] px-3 py-2 text-xs">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{ext.environment.uvLabel}</div>
+            <div className="mt-0.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+              {openMeteo?.current?.uvIndex !== null && openMeteo?.current?.uvIndex !== undefined
+                ? openMeteo.current.uvIndex.toFixed(1)
+                : '--'}
+            </div>
+          </div>
+        </div>
+
+        {overviewText?.text && (
+          <div className="mt-3 rounded-lg border border-[var(--nein-border)] bg-[var(--nein-sub)] p-3.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-slate-900 dark:text-slate-100">
+              <span>気象庁 天気概況（{selectedOffice.prefectureName}）</span>
+              <span className="font-mono text-[11px] font-normal text-slate-500">
+                {overviewText.reportDatetime ? formatJstTimestamp(overviewText.reportDatetime) : ''}
+              </span>
+            </div>
+            {overviewText.headlineText && (
+              <p className="mt-1 font-medium text-[var(--nein-accent-text)]">
+                {overviewText.headlineText}
+              </p>
+            )}
+            <p className="mt-1 whitespace-pre-line leading-relaxed text-slate-700 dark:text-slate-300">
+              {overviewText.text}
+            </p>
+            <RawTextDrawer
+              lang={lang}
+              rawText={`${overviewText.headlineText}\n${overviewText.text}`}
+              officialUrl={`https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${selectedOfficeCode}`}
+            />
+          </div>
+        )}
       </section>
 
       {/* 5. 24-Hour Temperature Chart + Official JMA Short Forecast & 6h PoP */}

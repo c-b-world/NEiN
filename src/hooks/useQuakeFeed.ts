@@ -33,6 +33,14 @@ import {
   requestBrowserNotificationPermission,
   saveNotificationEnabled,
 } from '../utils/browserNotification';
+import {
+  loadNotificationPrefs,
+  playChimeWithVolume,
+  recordAndDispatchNotification,
+  shouldNotifyForScale,
+} from '../utils/notificationCenter';
+import { getRecordTitle } from '../utils/quakeParser';
+import { setSourceStatus } from '../utils/sourceHealthTracker';
 
 export type WsStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
@@ -159,10 +167,29 @@ export function useQuakeFeed(): UseQuakeFeedResult {
 
   const raiseEEWAlert = useCallback((eew: EEW556 | EEWDetection554) => {
     setActiveEEW(eew);
+    const prefs = loadNotificationPrefs();
     if (soundEnabledRef.current) {
       playEEWAlertChime(eew.code === 556 && eew.cancelled);
+    } else if (prefs.chimeVolume > 0 && eew.isTest) {
+      playChimeWithVolume(prefs.chimeVolume, eew.code === 556 && eew.cancelled);
     }
     dispatchEEWBrowserNotification(eew, notificationEnabledRef.current);
+    recordAndDispatchNotification(
+      {
+        id: `eew:${eew.id}`,
+        category: 'eew',
+        title: getRecordTitle(eew, 'ja'),
+        body:
+          eew.code === 556
+            ? `${eew.earthquake?.hypocenter?.name || '解析中'} (${eew.isTest ? 'TEST' : 'EEW'})`
+            : '緊急地震速報 発表検出',
+        timestampIso: eew.time || new Date().toISOString(),
+        isTest: Boolean(eew.isTest),
+        statusTag: eew.code === 556 && eew.cancelled ? 'cancelled' : 'issued',
+        severity: eew.code === 556 && eew.cancelled ? 'info' : 'critical',
+      },
+      prefs,
+    );
   }, []);
 
   const toggleNotificationEnabled = useCallback(async () => {
@@ -229,6 +256,8 @@ export function useQuakeFeed(): UseQuakeFeedResult {
         setIsRefreshing(true);
       }
       setError(null);
+      const t0 = performance.now();
+      setSourceStatus('p2p_rest', 'updating');
 
       try {
         let fetchedItems: P2PQuakeRecord[] = [];
@@ -264,12 +293,32 @@ export function useQuakeFeed(): UseQuakeFeedResult {
           fetchedItems = await fetchHistoryPage(POLL_HISTORY_LIMIT, 0);
         }
 
-        // Detect newly arrived EEW events after initial hydration
+        // Detect newly arrived EEW events & major quakes after initial hydration
         if (initialLoadDoneRef.current) {
+          const prefs = loadNotificationPrefs();
           for (const item of fetchedItems) {
-            if (!seenIdsRef.current.has(item.id) && isEEWRecord(item)) {
-              raiseEEWAlert(item);
-              break;
+            if (!seenIdsRef.current.has(item.id)) {
+              if (isEEWRecord(item)) {
+                raiseEEWAlert(item);
+                break;
+              } else if (
+                item.code === 551 &&
+                shouldNotifyForScale(item.earthquake.maxScale, prefs.minQuakeScale, 'quake')
+              ) {
+                recordAndDispatchNotification(
+                  {
+                    id: `quake:${item.id}`,
+                    category: 'quake',
+                    title: getRecordTitle(item, 'ja'),
+                    body: item.earthquake.hypocenter.name || '',
+                    timestampIso: item.time,
+                    isTest: Boolean(item.isTest),
+                    statusTag: 'issued',
+                    severity: item.earthquake.maxScale >= 45 ? 'warning' : 'info',
+                  },
+                  prefs,
+                );
+              }
             }
           }
         }
@@ -289,12 +338,25 @@ export function useQuakeFeed(): UseQuakeFeedResult {
           });
         }
 
-        setLastUpdated(new Date());
+        const nowDate = new Date();
+        setLastUpdated(nowDate);
         setNextRefreshIn(pollIntervalSec);
+        setSourceStatus('p2p_rest', 'normal', {
+          lastFetchedAt: nowDate,
+          publishedAt: fetchedItems[0]?.time ?? null,
+          latencyMs: Math.round(performance.now() - t0),
+          cacheHit: false,
+          errorMessage: null,
+        });
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : '地震情報の取得に失敗しました';
         setError(msg);
+        setSourceStatus('p2p_rest', 'fetch_failed', {
+          lastFetchedAt: new Date(),
+          latencyMs: Math.round(performance.now() - t0),
+          errorMessage: msg,
+        });
         // Only fall back to deterministic sample if we have zero loaded items
         setRecords((prev) => {
           if (prev.length > 0) return prev;
@@ -451,7 +513,11 @@ export function useQuakeFeed(): UseQuakeFeedResult {
 
     const connect = () => {
       if (unmounted) return;
-      setWsStatus((prev) => (prev === 'offline' ? 'reconnecting' : 'connecting'));
+      setWsStatus((prev) => {
+        const next = prev === 'offline' ? 'reconnecting' : 'connecting';
+        setSourceStatus('p2p_ws', next === 'reconnecting' ? 'delayed' : 'connecting');
+        return next;
+      });
 
       try {
         ws = new WebSocket(P2PQUAKE_WS_URL);
@@ -459,6 +525,10 @@ export function useQuakeFeed(): UseQuakeFeedResult {
         ws.onopen = () => {
           if (!unmounted) {
             setWsStatus('connected');
+            setSourceStatus('p2p_ws', 'normal', {
+              lastFetchedAt: new Date(),
+              errorMessage: null,
+            });
           }
         };
 
@@ -474,13 +544,50 @@ export function useQuakeFeed(): UseQuakeFeedResult {
             seenIdsRef.current.add(incoming.id);
 
             setRecords((prev) => mergeQuakeRecords([incoming], prev, MAX_HISTORY_RECORDS));
-            setLastUpdated(new Date());
+            const nowDate = new Date();
+            setLastUpdated(nowDate);
+            setSourceStatus('p2p_ws', 'normal', {
+              lastFetchedAt: nowDate,
+              publishedAt: incoming.time,
+              errorMessage: null,
+            });
 
             if (isNew && isEEWRecord(incoming)) {
               raiseEEWAlert(incoming);
               setSelectedId(incoming.id);
             } else if (isNew && incoming.code === 551) {
               setSelectedId(incoming.id);
+              const prefs = loadNotificationPrefs();
+              if (shouldNotifyForScale(incoming.earthquake.maxScale, prefs.minQuakeScale, 'quake')) {
+                recordAndDispatchNotification(
+                  {
+                    id: `quake:${incoming.id}`,
+                    category: 'quake',
+                    title: getRecordTitle(incoming, 'ja'),
+                    body: incoming.earthquake.hypocenter.name || '',
+                    timestampIso: incoming.time,
+                    isTest: false,
+                    statusTag: 'issued',
+                    severity: incoming.earthquake.maxScale >= 45 ? 'warning' : 'info',
+                  },
+                  prefs,
+                );
+              }
+            } else if (isNew && incoming.code === 552) {
+              const prefs = loadNotificationPrefs();
+              recordAndDispatchNotification(
+                {
+                  id: `tsunami:${incoming.id}`,
+                  category: 'tsunami',
+                  title: getRecordTitle(incoming, 'ja'),
+                  body: incoming.cancelled ? '解除' : '津波予報更新',
+                  timestampIso: incoming.time,
+                  isTest: false,
+                  statusTag: incoming.cancelled ? 'lifted' : 'issued',
+                  severity: incoming.cancelled ? 'info' : 'critical',
+                },
+                prefs,
+              );
             }
           } catch {
             // Ignore non-JSON or malformed WebSocket frames
@@ -490,16 +597,25 @@ export function useQuakeFeed(): UseQuakeFeedResult {
         ws.onerror = () => {
           if (!unmounted) {
             setWsStatus('reconnecting');
+            setSourceStatus('p2p_ws', 'delayed', {
+              errorMessage: 'WebSocket再接続中',
+            });
           }
         };
 
         ws.onclose = () => {
           if (unmounted) return;
           setWsStatus('reconnecting');
+          setSourceStatus('p2p_ws', 'delayed', {
+            errorMessage: 'WebSocket切断・再接続待機',
+          });
           reconnectTimer = window.setTimeout(connect, 5000);
         };
       } catch {
         setWsStatus('offline');
+        setSourceStatus('p2p_ws', 'disconnected', {
+          errorMessage: 'WebSocket接続不可',
+        });
       }
     };
 

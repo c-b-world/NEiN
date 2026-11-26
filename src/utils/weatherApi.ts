@@ -14,6 +14,7 @@ import {
   parseJmaWarning,
   parseOpenMeteoBundle,
 } from './weatherParser';
+import { setSourceStatus } from './sourceHealthTracker';
 
 const CACHE_TTL_MS = {
   areaConst: 60 * 60 * 1000, // 60 min
@@ -304,7 +305,7 @@ export async function fetchOpenMeteoRaw(
   const url =
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${office.lat}&longitude=${office.lon}` +
-    `&current=temperature_2m,relative_humidity_2m,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,precipitation,weather_code` +
+    `&current=temperature_2m,relative_humidity_2m,apparent_temperature,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,snowfall,weather_code,visibility,uv_index` +
     `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max` +
     `&wind_speed_unit=ms&timezone=Asia%2FTokyo&forecast_days=8`;
@@ -427,6 +428,45 @@ export async function fetchOfficeWeatherDetail(
           hourly24h: [],
           daily7d: [],
         };
+
+  setSourceStatus(
+    'jma_forecast_warning',
+    warning.meta.status === 'error' && forecast.meta.status === 'error'
+      ? 'fetch_failed'
+      : warning.meta.isStale || forecast.meta.isStale
+      ? 'expired'
+      : 'normal',
+    {
+      lastFetchedAt: nowDate,
+      publishedAt: warning.meta.publishedAt ?? forecast.meta.publishedAt,
+      errorMessage:
+        warning.meta.status === 'error'
+          ? warning.meta.errorMessage
+          : forecast.meta.errorMessage,
+    },
+  );
+  setSourceStatus(
+    'jma_amedas',
+    amedas.meta.status === 'error'
+      ? 'fetch_failed'
+      : amedas.meta.isStale
+      ? 'expired'
+      : 'normal',
+    {
+      lastFetchedAt: nowDate,
+      publishedAt: amedas.observedAtIso,
+      errorMessage: amedas.meta.errorMessage,
+    },
+  );
+  setSourceStatus(
+    'openmeteo_suite',
+    openMeteo.meta.status === 'error' ? 'fetch_failed' : 'normal',
+    {
+      lastFetchedAt: nowDate,
+      publishedAt: openMeteo.meta.publishedAt,
+      errorMessage: openMeteo.meta.errorMessage,
+    },
+  );
 
   return {
     forecast,
