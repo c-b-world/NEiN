@@ -2,10 +2,13 @@ import {
   Activity,
   Anchor,
   BellRing,
+  Calculator,
   Check,
+  CheckSquare,
   ChevronDown,
   CloudRain,
   CloudSun,
+  Cpu,
   History,
   LayoutDashboard,
   Leaf,
@@ -14,9 +17,11 @@ import {
   Monitor,
   Mountain,
   Radar,
+  Ruler,
   Server,
   Settings,
   ShieldAlert,
+  Timer,
   Waves,
   Wind,
   Wrench,
@@ -37,13 +42,17 @@ export type AppViewMode =
   | 'marine'
   | 'environment'
   | 'map'
+  | 'life_calc'
+  | 'life_timer'
+  | 'life_convert'
+  | 'life_notes'
   | 'monitor'
   | 'replay'
   | 'timeline'
   | 'status'
   | 'settings';
 
-export type NavGroupId = 'quake' | 'weather' | 'disaster' | 'tools';
+export type NavGroupId = 'quake' | 'weather' | 'disaster' | 'tools' | 'system';
 
 export interface NavSubItem {
   view: AppViewMode;
@@ -165,27 +174,82 @@ export const NAV_GROUPS: NavGroupDef[] = [
     id: 'tools',
     title: 'TOOLS',
     testId: 'nav-tools',
-    defaultView: 'monitor',
+    defaultView: 'life_calc',
     icon: Wrench,
     animClass: 'nein-tab-tools',
     alignRight: true,
     items: [
       {
+        view: 'life_calc',
+        testId: 'tools-submenu-calc',
+        icon: Calculator,
+        labels: {
+          ja: '電卓・割り勘',
+          en: 'Calculator & Split',
+          zh: '计算器与AA分账',
+          ko: '계산기·더치페이',
+        },
+      },
+      {
+        view: 'life_timer',
+        testId: 'tools-submenu-timer',
+        icon: Timer,
+        labels: {
+          ja: 'タイマー・時計',
+          en: 'Timer & Clock',
+          zh: '计时器与时钟',
+          ko: '타이머·시계',
+        },
+      },
+      {
+        view: 'life_convert',
+        testId: 'tools-submenu-convert',
+        icon: Ruler,
+        labels: {
+          ja: '単位・和暦変換',
+          en: 'Units & Era',
+          zh: '单位与和历换算',
+          ko: '단위·연호 변환',
+        },
+      },
+      {
+        view: 'life_notes',
+        testId: 'tools-submenu-notes',
+        icon: CheckSquare,
+        labels: {
+          ja: 'メモ・リスト',
+          en: 'Memo & Checklist',
+          zh: '备忘录与清单',
+          ko: '메모·체크리스트',
+        },
+      },
+    ],
+  },
+  {
+    id: 'system',
+    title: 'SYSTEM',
+    testId: 'nav-system',
+    defaultView: 'monitor',
+    icon: Cpu,
+    animClass: 'nein-tab-system',
+    alignRight: true,
+    items: [
+      {
         view: 'monitor',
-        testId: 'tools-submenu-monitor',
+        testId: 'system-submenu-monitor',
         icon: Monitor,
         labels: { ja: '監視モード', en: 'Monitor Mode', zh: '监测模式', ko: '모니터링' },
       },
       {
         view: 'replay',
         matchViews: ['replay', 'timeline'],
-        testId: 'tools-submenu-replay',
+        testId: 'system-submenu-replay',
         icon: History,
         labels: { ja: '履歴再生', en: 'History Replay', zh: '历史回放', ko: '이력 재생' },
       },
       {
         view: 'status',
-        testId: 'tools-submenu-status',
+        testId: 'system-submenu-status',
         icon: Server,
         labels: { ja: '稼働状況', en: 'System Status', zh: '运行状态', ko: '가동 현황' },
       },
@@ -252,11 +316,11 @@ export function Header({
           NEiN
         </a>
 
-        {/* Desktop Primary Top Bar: [Icon] HOME / [Icon] QUAKE ▾ / [Icon] WEATHER ▾ / [Icon] DISASTER ▾ / [Icon] TOOLS ▾ / ⚙ */}
+        {/* Desktop Primary Top Bar: [Icon] HOME / [Icon] QUAKE ▾ / [Icon] WEATHER ▾ / [Icon] DISASTER ▾ / [Icon] TOOLS ▾ / [Icon] SYSTEM ▾ / ⚙ */}
         <nav
           ref={navRef}
           aria-label={m.nav.navAria}
-          className="hidden md:flex items-center gap-4 lg:gap-6"
+          className="hidden md:flex items-center gap-3.5 lg:gap-5"
         >
           <button
             type="button"

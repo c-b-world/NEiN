@@ -28,6 +28,7 @@ import { QuakeExtendedPanel } from './components/quake/QuakeExtendedPanel';
 import { RealtimeMonitorView } from './components/system/RealtimeMonitorView';
 import { ReplayArchiveView } from './components/system/ReplayArchiveView';
 import { SystemStatusPanel } from './components/system/SystemStatusPanel';
+import { LifeToolsWorkspace } from './components/tools/LifeToolsWorkspace';
 import { DisasterHazardsView } from './components/weather/DisasterHazardsView';
 import { EnvironmentView } from './components/weather/EnvironmentView';
 import { RadarSatelliteView } from './components/weather/RadarSatelliteView';
@@ -801,6 +802,15 @@ export default function App() {
             xmlBulletins={hub.xmlBulletins}
             onLoadTsunamiDetail={hub.loadTsunamiEventDetail}
             onRefresh={() => void hub.refreshCoreFeeds(true)}
+          />
+        ) : activeView === 'life_calc' ||
+          activeView === 'life_timer' ||
+          activeView === 'life_convert' ||
+          activeView === 'life_notes' ? (
+          <LifeToolsWorkspace
+            lang={lang}
+            activeTool={activeView}
+            onSelectTool={setActiveView}
           />
         ) : activeView === 'monitor' ? (
           <RealtimeMonitorView
